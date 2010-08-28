@@ -586,8 +586,6 @@ def run():
 	global config
 	print 'Bot started.'
 	loadPage(config['pages']['filters'])
-	fixPage('Medigun')
-	return
 	loadBlacklist()
 	patrolChanges()
 	updateRCID()
