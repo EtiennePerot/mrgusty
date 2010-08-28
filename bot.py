@@ -112,7 +112,7 @@ def updateEditCount(force=False):
 	global config
 	if not config['runtime']['edits']:
 		return
-	if not force and random.randint(0, 20) != 7:
+	if not force and random.randint(0, 40) != 7:
 		return
 	try:
 		editPage(config['pages']['editcount'], int(wikitools.api.APIRequest(wiki(), {
@@ -203,13 +203,22 @@ class link:
 		return self.__unicode__().__repr__()
 	def __unicode__(self):
 		if self.getType() == u'internal':
-			if self.getLabel() in (self.getLink().replace(u'_', u' '), self.getLink()):
-				return u'[[' + self.getLabel() + u']]'
-			return u'[[' + self.getLink() + u'|' + self.getLabel() + u']]'
+			label = self.getLabel()
+			tmpLink = self.getLink()
+			tmpLink2 = tmpLink.replace(u'_', u' ')
+			if label in (tmpLink2, tmpLink):
+				return u'[[' + label + u']]'
+			elif label and tmpLink and (label[0].lower() == tmpLink[0].lower() and tmpLink[1:] == label[1:]) or (label[0].lower() == tmpLink2[0].lower() and tmpLink2[1:] == label[1:]):
+				return u'[[' + label + u']]'
+			elif tmpLink and label and len(label) > len(tmpLink) and (label.lower().find(tmpLink2.lower()) != -1 or label.lower().find(tmpLink.lower()) != -1):
+				index = max(label.lower().find(tmpLink2.lower()), label.lower().find(tmpLink.lower()))
+				if label[:index].find(u' ') == -1 and label[index+len(tmpLink):].find(u' ') == -1:
+					return label[:index] + u(link(u'[[' + tmpLink + u'|' + label[index:index+len(tmpLink)] + u']]')) + label[index+len(tmpLink):]
+			return u'[[' + tmpLink + u'|' + label + u']]'
 		if self.getType() == u'external':
-			if self.getLabel() is None:
-				return u'[' + self.getLink() + u']'
-			return u'[' + self.getLink() + u' ' + self.getLabel() + u']'
+			if label is None:
+				return u'[' + tmpLink + u']'
+			return u'[' + tmpLink + u' ' + label + u']'
 		return self.getBody()
 def linkExtract(content):
 	links1 = compileRegex(r'\[\[([^\[\]]+)\]\]')
