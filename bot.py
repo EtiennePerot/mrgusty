@@ -200,11 +200,11 @@ class link:
 	def __str__(self):
 		return self.__unicode__()
 	def __repr__(self):
-		return self.__unicode__().__repr__()
+		return u'<Link-' + self.getType() + ': ' + self.__unicode__() + u'>'
 	def __unicode__(self):
+		label = self.getLabel()
+		tmpLink = self.getLink()
 		if self.getType() == u'internal':
-			label = self.getLabel()
-			tmpLink = self.getLink()
 			tmpLink2 = tmpLink.replace(u'_', u' ')
 			if label in (tmpLink2, tmpLink):
 				return u'[[' + label + u']]'
@@ -212,7 +212,12 @@ class link:
 				return u'[[' + label + u']]'
 			elif tmpLink and label and len(label) > len(tmpLink) and (label.lower().find(tmpLink2.lower()) != -1 or label.lower().find(tmpLink.lower()) != -1):
 				index = max(label.lower().find(tmpLink2.lower()), label.lower().find(tmpLink.lower()))
-				if label[:index].find(u' ') == -1 and label[index+len(tmpLink):].find(u' ') == -1:
+				badchars = (u' ', u'_')
+				nobadchars = True
+				for c in badchars:
+					if label[:index].find(c) != -1 or label[index+len(tmpLink):].find(c) != -1:
+						nobadchars = False
+				if nobadchars:
 					return label[:index] + u(link(u'[[' + tmpLink + u'|' + label[index:index+len(tmpLink)] + u']]')) + label[index+len(tmpLink):]
 			return u'[[' + tmpLink + u'|' + label + u']]'
 		if self.getType() == u'external':
@@ -581,6 +586,8 @@ def run():
 	global config
 	print 'Bot started.'
 	loadPage(config['pages']['filters'])
+	fixPage('Medigun')
+	return
 	loadBlacklist()
 	patrolChanges()
 	updateRCID()
