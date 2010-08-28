@@ -145,8 +145,11 @@ def error(*info):
 class link:
 	def __init__(self, content):
 		content = u(content)
+		self.joined = False
 		self.setBody(content)
 		self.setType(u'unknown')
+		self.setLabel(None)
+		self.setLink(u'')
 		self.joined = False
 		if len(content) > 2:
 			if content[:2] == u'[[' and content[-2:] == u']]':
@@ -200,7 +203,7 @@ class link:
 	def __str__(self):
 		return self.__unicode__()
 	def __repr__(self):
-		return u'<Link-' + self.getType() + ': ' + self.__unicode__() + u'>'
+		return u'<Link-' + self.getType() + u': ' + self.__unicode__() + u'>'
 	def __unicode__(self):
 		label = self.getLabel()
 		tmpLink = self.getLink()
