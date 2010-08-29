@@ -305,6 +305,23 @@ def dumbReplacement(strings, content, **kwargs):
 	for s in strings.keys():
 		content = content.replace(u(s), u(strings[s]))
 	return content
+def filterEnabled(f, **kwargs):
+	if type(f) is not type(()):
+		return True
+	if len(f) < 2:
+		return True
+	if type(f[1]) is not type({}):
+		return True
+	if 'language' in f[1].keys():
+		if 'article' in kwargs.keys():
+			article = kwargs['article']
+			if article is None:
+				return True
+			if type(article) not in (type(u''), type('')):
+				article = article.title
+			#print 'Article', article, 'vs', u'/' + u(f[1]['language']) + u'$', 'yields', (not not compileRegex(u'/' + u(f[1]['language']) + u'$').search(u(article)))
+			return compileRegex(u'/' + u(f[1]['language']) + u'$').search(u(article))
+	return True
 def sFilter(filters, content, **kwargs):
 	content = u(content)
 	lenfilters = len(filters)
@@ -313,6 +330,10 @@ def sFilter(filters, content, **kwargs):
 	oldcontent = content
 	filtercount = 0
 	for f in filters:
+		if not filterEnabled(f, **kwargs):
+			continue
+		if type(f) is type(()):
+			f, params = f
 		filtercount += 1
 		#print 'Filter', f, '(', filtercount, '/', lenfilters, ')'
 		loopTimes = 0
@@ -326,17 +347,21 @@ def sFilter(filters, content, **kwargs):
 	return content
 def linkFilter(filters, linklist, **kwargs):
 	for f in filters:
+		if not filterEnabled(f, **kwargs):
+			continue
+		if type(f) is type(()):
+			f, params = f
 		for i in range(len(linklist)):
 			linklist[i] = f(linklist[i], **kwargs)
 	return linklist
-def linkTextFilter(filters, linklist, linksafe=False):
+def linkTextFilter(filters, linklist, linksafe=False, **kwargs):
 	for i in range(len(linklist)):
 		l = linklist[i]
 		if l.getType() == u'internal' and l.getLink().find(u':') == -1 and pageFilter(l.getLink()):
 			if linksafe:
-				l.setLink(sFilter(filters, l.getLink()))
+				l.setLink(sFilter(filters, l.getLink(), **kwargs))
 			if l.getLabel().find(u':') == -1:
-				l.setLabel(sFilter(filters, l.getLabel()))
+				l.setLabel(sFilter(filters, l.getLabel(), **kwargs))
 		linklist[i] = l
 	return linklist
 
@@ -349,7 +374,7 @@ def dumbReplaces(rs):
 def dumbReplace(subject, replacement):
 	return curry({subject: replacement})
 def wordRegex(word):
-	word = u(re.sub(r' +', r'[-_ ]', u(word)))
+	word = u(re.sub(r'[- ]+', r'[-_ ]', u(word)))
 	return u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + r")(?:\b|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + r")|$)")
 def wordFilter(correct, *badwords, **kwargs):
 	correct = u(correct)
@@ -411,23 +436,26 @@ def loadBlacklist():
 				continue
 		addBlacklistPage(l)
 
-filters = []
-safeFilters = []
-linkFilters = []
-def addFilter(*fs):
+filters ={
+	'regular':[],
+	'safe':[],
+	'link':[],
+	'template':[]
+}
+def addFilter(*fs, **kwargs):
 	global filters
 	for f in fs:
-		filters.append(f)
-def addSafeFilter(*fs):
-	global safeFilters
+		filters['regular'].append((f, kwargs))
+def addSafeFilter(*fs, **kwargs):
+	global filters
 	for f in fs:
-		safeFilters.append(f)
-def addLinkFilter(*fs):
-	global linkFilters
+		filters['safe'].append((f, kwargs))
+def addLinkFilter(*fs, **kwargs):
+	global filters
 	for f in fs:
-		linkFilters.append(f)
+		filters['link'].append((f, kwargs))
 def fixContent(content, article=None):
-	global filters, safeFilters, linkFilters
+	global filters
 	content = u(content)
 	oldcontent = u''
 	loopTimes = 0
@@ -440,16 +468,16 @@ def fixContent(content, article=None):
 			break
 		oldcontent = content
 		# Apply unsafe filters
-		content = sFilter(filters, content, article=article)
+		content = sFilter(filters['regular'], content, article=article)
 		# Apply safe filters
-		if len(safeFilters):
+		if len(filters['safe']):
 			content, linklist, safelist = safeContent(content)
-			linklist = linkTextFilter(safeFilters, linklist)
-			content = sFilter(safeFilters, content, article=article)
+			linklist = linkTextFilter(filters['safe'], linklist, article=article)
+			content = sFilter(filters['safe'], content, article=article)
 			content = safeContentRestore(content, linklist, safelist)
-		if len(linkFilters):
+		if len(filters['link']):
 			content, linklist = linkExtract(content)
-			linklist = linkFilter(linkFilters, linklist)
+			linklist = linkFilter(filters['link'], linklist, article=article)
 			content = linkRestore(content, linklist)
 	return content
 def fixPage(article, **kwargs):
@@ -474,7 +502,8 @@ def fixPage(article, **kwargs):
 		summary = u'Applied filters to [[:' + u(article.title) + u']]'
 		if 'reason' in kwargs:
 			summary += u' (' + u(kwargs['reason']) + u')'
-		editPage(article, content, summary=summary)
+		if 'fake' not in kwargs:
+			editPage(article, content, summary=summary)
 		return True
 	print article, 'is up-to-date.'
 	return False
