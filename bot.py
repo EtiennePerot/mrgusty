@@ -16,6 +16,7 @@
 import sys
 import re
 import urllib2
+import traceback
 import random
 import subprocess
 import wikitools
@@ -213,7 +214,7 @@ class link:
 				return u'[[' + label + u']]'
 			elif label and tmpLink and (label[0].lower() == tmpLink[0].lower() and tmpLink[1:] == label[1:]) or (label[0].lower() == tmpLink2[0].lower() and tmpLink2[1:] == label[1:]):
 				return u'[[' + label + u']]'
-			elif tmpLink and label and len(label) > len(tmpLink) and (label.lower().find(tmpLink2.lower()) != -1 or label.lower().find(tmpLink.lower()) != -1):
+			elif tmpLink and label and len(label) > len(tmpLink) and (label.lower().find(tmpLink2.lower()) == 0 or label.lower().find(tmpLink.lower()) == 0):
 				index = max(label.lower().find(tmpLink2.lower()), label.lower().find(tmpLink.lower()))
 				badchars = (u' ', u'_')
 				nobadchars = True
@@ -372,7 +373,7 @@ def regex(reg, replace):
 def dumbReplaces(rs):
 	return curry(dumbReplacement, rs)
 def dumbReplace(subject, replacement):
-	return curry({subject: replacement})
+	return dumbReplaces({subject: replacement})
 def wordRegex(word):
 	word = u(re.sub(r'[- ]+', r'[-_ ]', u(word)))
 	return u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + r")(?:\b|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + r")|$)")
@@ -614,6 +615,73 @@ def doPageRequests(force=False):
 			editPage(requestPage, requests, summary=u'Processed: [[:' + u']], [[:'.join(tofix) + u']]')
 		else:
 			editPage(requestPage, requests, summary=u'Finished all requests. Processed: [[:' + u']], [[:'.join(tofix) + u']]')
+def parseLocaleFile(content, language='english', languages={}):
+	content = u(content)
+	language = u(language)
+	if content.find('Tokens') != -1:
+		content = content[content.find('Tokens')+6:]
+	regexSplit = compileRegex('\n(?=\s*")', re.IGNORECASE | re.MULTILINE)
+	content = regexSplit.split(content)
+	regexLang = compileRegex(r'^"\[([-\w]+)\]([^"\s]+)"\s+"([^"]*)"', re.IGNORECASE | re.MULTILINE)
+	regexNoLang = compileRegex(r'^"([^[][^"\s]+)"\s+"([^"]*)"', re.IGNORECASE | re.MULTILINE)
+	for l in content:
+		l = u(l.strip())
+		curlang = None
+		key, value = None, None
+		langRes = regexLang.search(l)
+		if langRes:
+			curlang = u(langRes.group(1))
+			key, value = langRes.group(2), langRes.group(3)
+		else:
+			langRes = regexNoLang.search(l)
+			if langRes:
+				curlang = language
+				key, value = langRes.group(1), langRes.group(2)
+		if curlang is not None:
+			if u(key) not in languages:
+				languages[u(key)] = {}
+			languages[u(key)][curlang] = u(value)
+		else:
+			print 'Invalid line:', l.__repr__()
+	return languages
+def languagesFilter(languages, commonto=None, prefix=None, suffix=None):
+	filtered = {}
+	for k in languages:
+		if commonto is not None:
+			doit = True
+			for i in commonto:
+				if i not in languages[k]:
+					doit = False
+					break
+			if not doit:
+				continue
+		if prefix is not None:
+			doit = False
+			for i in prefix:
+				if k.lower()[:len(i)] == i.lower():
+					doit = True
+					break
+			if not doit:
+				continue
+		if suffix is not None:
+			doit = False
+			for i in suffix:
+				if k.lower()[-len(i):] == i.lower():
+					doit = True
+					break
+			if not doit:
+				continue
+		filtered[u(k)] = languages[k]
+	return filtered
+def readLocaleFile(f):
+	return u(f.decode('utf16'))
+def associateLocaleWordFilters(languages, fromLang, toLang, targetPageLang=None):
+	for a in languages:
+		f = wordFilter(languages[a][toLang], languages[a][fromLang])
+		if targetPageLang is None:
+			addSafeFilter(f)
+		else:
+			addSafeFilter(f, language=targetPageLang)
 def run():
 	global config
 	print 'Bot started.'
@@ -624,6 +692,8 @@ def run():
 	doPageRequests(force=True)
 	doPageRequests(force=False)
 	updateEditCount()
+	import rcNotify
+	rcNotify.main(once=True)
 	try:
 		subprocess.Popen(['killall', 'cpulimit']).communicate()
 	except:
