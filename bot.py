@@ -503,7 +503,11 @@ def fixPage(article, **kwargs):
 		summary = u'Applied filters to [[:' + u(article.title) + u']]'
 		if 'reason' in kwargs:
 			summary += u' (' + u(kwargs['reason']) + u')'
-		if 'fake' not in kwargs:
+		if 'fake' in kwargs:
+			print '-------- New content is: --------'
+			print content
+			print '---------------------------------'
+		else:
 			editPage(article, content, summary=summary)
 		return True
 	print article, 'is up-to-date.'
@@ -642,11 +646,13 @@ def parseLocaleFile(content, language='english', languages={}):
 				languages[u(key)] = {}
 			languages[u(key)][curlang] = u(value)
 		else:
-			print 'Invalid line:', l.__repr__()
+			pass #print 'Invalid line:', l.__repr__()
 	return languages
-def languagesFilter(languages, commonto=None, prefix=None, suffix=None):
+def languagesFilter(languages, commonto=None, prefix=None, suffix=None, exceptions=[]):
 	filtered = {}
 	for k in languages:
+		if k in exceptions:
+			continue
 		if commonto is not None:
 			doit = True
 			for i in commonto:
