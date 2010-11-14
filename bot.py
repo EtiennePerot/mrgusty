@@ -14,12 +14,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
+import os
+import time, datetime
 import re
 import urllib2
 import traceback
 import random
 import subprocess
+import cStringIO as StringIO
 import wikitools
+import wikiUpload
+import feedparser
 
 from botConfig import config
 config['runtime'] = {
@@ -84,7 +89,7 @@ def wiki():
 	return config['runtime']['wiki']
 def page(p):
 	if type(p) in (type(''), type(u'')):
-		p = wikitools.page.Page(wiki(), u(p))
+		p = wikitools.page.Page(wiki(), u(p), followRedir=False)
 	return p
 def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 	global config
@@ -210,9 +215,7 @@ class link:
 		tmpLink = self.getLink()
 		if self.getType() == u'internal':
 			tmpLink2 = tmpLink.replace(u'_', u' ')
-			if label in (tmpLink2, tmpLink):
-				return u'[[' + label + u']]'
-			elif label and tmpLink and (label[0].lower() == tmpLink[0].lower() and tmpLink[1:] == label[1:]) or (label[0].lower() == tmpLink2[0].lower() and tmpLink2[1:] == label[1:]):
+			if label in (tmpLink2, tmpLink) or (label and tmpLink and (label[0].lower() == tmpLink[0].lower() and tmpLink[1:] == label[1:]) or (label[0].lower() == tmpLink2[0].lower() and tmpLink2[1:] == label[1:])):
 				return u'[[' + label + u']]'
 			elif tmpLink and label and len(label) > len(tmpLink) and (label.lower().find(tmpLink2.lower()) == 0 or label.lower().find(tmpLink.lower()) == 0):
 				index = max(label.lower().find(tmpLink2.lower()), label.lower().find(tmpLink.lower()))
@@ -229,6 +232,189 @@ class link:
 				return u'[' + tmpLink + u']'
 			return u'[' + tmpLink + u' ' + label + u']'
 		return self.getBody()
+class template:
+	maxInlineParams = 3
+	def __init__(self, content):
+		content = u(content)
+		self.changed = False
+		self.content = content
+		self.name = None
+		self.order = None
+		self.params = []
+		self.paramNum = 0
+		self.indentation = {}
+		self.defaultIndent = 0
+		if len(content) > 4 and content[:2] == '{{' and content[-2:] == '}}':
+			innerRegex = compileRegex(r'\s*\|\s*')
+			itemRegex = compileRegex(r'^(\S[^=]*?)\s*=\s*(.*?)$')
+			innerStuff = innerRegex.split(content[2:-2])
+			if innerStuff[0][:9].lower() == 'template:':
+				innerStuff[0] = innerStuff[0][9:]
+			self.name = u(innerStuff[0][0].upper() + innerStuff[0][1:]).replace(u'_', u' ').strip()
+			innerStuff = innerStuff[1:]
+			for i in innerStuff:
+				i = i.strip()
+				itemRes = itemRegex.search(i)
+				if itemRes:
+					self.params.append((u(itemRes.group(1)), u(itemRes.group(2))))
+				else:
+					self.paramNum += 1
+					self.params.append((u(self.paramNum), i))
+		self.originalContent = self.content
+		self.originalParams = self.params[:]
+		self.originalName = self.name
+		self.forceindent = False
+	def indentationMatters(self, doesitmatter=True):
+		self.forceindent = doesitmatter
+	def getName(self):
+		return self.name
+	def setName(self, name):
+		self.name = u(name).replace(u'_', u' ')
+		self.changed = self.changed or self.name != self.originalName
+	def getParam(self, key):
+		key = u(key)
+		for k, v in self.params:
+			if k == key:
+				return v
+		return None
+	def delParam(self, *indexes):
+		for index in indexes:
+			index = u(index)
+			isNumber = self.isInt(index)
+			for p in range(len(self.params)):
+				k, v = self.params[p]
+				if k == index:
+					self.changed = True
+					self.params = self.params[:p] + self.params[p+1:]
+					if isNumber:
+						if int(index) == self.paramNum:
+							self.paramNum -= 1
+					break
+	def setParam(self, index=None, value=u''):
+		if value is None:
+			return self.delParam(index)
+		if index is None:
+			index = u(self.paramNum)
+		else:
+			index = u(index)
+		isNumber = self.isInt(index)
+		value = u(value)
+		hasChanged = False
+		for p in range(len(self.params)):
+			k, v = self.params[p]
+			if k == index:
+				self.changed = self.changed or v != value
+				self.params[p] = (k, value)
+				hasChanged = True
+				break
+		if not hasChanged:
+			if isNumber:
+				while self.numParam < int(index) - 1:
+					self.appendParam(u'')
+			self.params.append((index, value))
+			self.changed = True
+	def appendParam(self, value=u''):
+		self.paramNum += 1
+		self.params.append((u(self.paramNum), value))
+	def setPreferedIndentation(self, index, indent=0):
+		self.indentation[u(index)] = indent
+		self.changed = self.changed or self.forceindent
+	def setDefaultIndentation(self, indent=0):
+		self.defaultIndent = indent
+		self.changed = self.changed or self.forceindent
+	def setPreferedOrder(self, order=None):
+		order2 = []
+		for o in order:
+			order2.append(u(o))
+		self.order = order2
+		oldParams = self.params[:]
+		self.changed = self.changed or self.fixOrder() == oldParams
+	def renameParam(self, oldkey, newkey):
+		oldkey, newkey = u(oldkey), u(newkey)
+		if oldkey == newkey:
+			return
+		for p in range(len(self.params)):
+			k, v = self.params[p]
+			if k == oldkey:
+				self.params[p] = (newkey, v)
+				self.changed = True
+				break
+	def fixOrder(self):
+		if self.order is None:
+			return self.params
+		newParams = []
+		doneParams = []
+		for k in self.order:
+			k = u(k)
+			if self.getParam(k) is not None:
+				newParams.append((k, self.getParam(k)))
+				doneParams.append(k)
+		for k, v in self.params:
+			if k not in doneParams:
+				doneParams.append(k)
+				newParams.append((k, v))
+		self.params = newParams
+		return self.params
+	def defined(self):
+		return self.name is not None
+	def isInt(self, i):
+		try:
+			return u(int(i)) == u(i) and int(i) > 0
+		except:
+			return False
+	def __str__(self):
+		return self.__unicode__()
+	def __repr__(self):
+		return u'<Template-' + self.getName() + u': ' + self.__unicode__() + u'>'
+	def __unicode__(self):
+		if not self.defined():
+			return u''
+		if not self.changed:
+			return self.originalContent
+		self.fixOrder()
+		params = [self.name]
+		indentMode = len(self.params) > template.maxInlineParams or self.forceindent
+		maxIndent = 0
+		if indentMode:
+			for k, v in self.params:
+				l = len(k) + self.defaultIndent
+				if k in self.indentation:
+					l = len(k) + self.indentation[k]
+				if not self.isInt(k) and l > maxIndent:
+					maxIndent = l
+		numParam = 1
+		for k, v in self.params:
+			indent = self.defaultIndent
+			if k in self.indentation and indentMode:
+				indent = self.indentation[k]
+			try:
+				isNumber = u(int(index)) == u(index) and int(index) > 0
+			except:
+				isNumber = False
+			if indentMode:
+				key = u' ' * indent + u'| '
+				addKey = True
+				if self.isInt(k):
+					if int(k) == numParam:
+						addKey = False
+					numParam += 1
+				if addKey:
+					key += k + (u' ' * max(0, maxIndent - len(k) - indent)) + u' = '
+			else:
+				key = u''
+				addKey = True
+				if self.isInt(k):
+					if int(k) == numParam:
+						addKey = False
+					numParam += 1
+				if addKey:
+					key += k + u' = '
+			params.append(key + v)
+		if indentMode:
+			params = u'\n'.join(params) + u'\n'
+		else:
+			params = u' | '.join(params)
+		return u'{{' + params + u'}}'
 def linkExtract(content):
 	links1 = compileRegex(r'\[\[([^\[\]]+)\]\]')
 	links2 = compileRegex(r'\[([^\[\]]+)\](?!\])')
@@ -247,13 +433,52 @@ def linkExtract(content):
 		linkcount += 1
 		res = links2.search(content)
 	return content, linklist
+def templateExtract(content):
+	templatesR = compileRegex(r'\{\{([^\{\}]+)\}\}')
+	templatecount = 0
+	templatelist = []
+	res = templatesR.search(content)
+	while res:
+		templatelist.append(template(res.group()))
+		content = content[:res.start()] + u'~!~!~!~OMGTEMPLATE-' + u(templatecount) + u'~!~!~!~' + content[res.end():]
+		templatecount += 1
+		res = templatesR.search(content)
+	return content, templatelist
+def blankAround(content, search, repl=u''):
+	content = u(content)
+	search = u(search)
+	repl = u(repl)
+	blank = compileRegex(u'(\\s*)' + u(re.escape(search)) + u'(\\s*)')
+	res = blank.search(content)
+	if not res:
+		return content.replace(search, repl)
+	if u(res.group(0)) == content:
+		return repl
+	if len(res.group(1)) < len(res.group(2)):
+		return content[:res.end(1)] + content[res.end(2):]
+	else:
+		return content[:res.start()] + content[res.start(2):]
 def linkRestore(content, linklist=[]):
 	linkcount = len(linklist)
 	i = 0
 	linklist.reverse()
 	for l in linklist:
 		i += 1
-		content = content.replace(u'~!~!~!~OMGLINK-' + u(linkcount - i) + u'~!~!~!~', u(l))
+		if l is None:
+			content = blankAround(content, u'~!~!~!~OMGLINK-' + u(linkcount - i) + u'~!~!~!~', u'')
+		else:
+			content = content.replace(u'~!~!~!~OMGLINK-' + u(linkcount - i) + u'~!~!~!~', u(l))
+	return content
+def templateRestore(content, templatelist=[]):
+	templatecount = len(templatelist)
+	i = 0
+	templatelist.reverse()
+	for t in templatelist:
+		i += 1
+		if t is None:
+			content = blankAround(content, u'~!~!~!~OMGTEMPLATE-' + u(templatecount - i) + u'~!~!~!~', u'')
+		else:
+			content = content.replace(u'~!~!~!~OMGTEMPLATE-' + u(templatecount - i) + u'~!~!~!~', u(t))
 	return content
 def safeContent(content):
 	content, linklist = linkExtract(content)
@@ -323,6 +548,11 @@ def filterEnabled(f, **kwargs):
 			#print 'Article', article, 'vs', u'/' + u(f[1]['language']) + u'$', 'yields', (not not compileRegex(u'/' + u(f[1]['language']) + u'$').search(u(article)))
 			return compileRegex(u'/' + u(f[1]['language']) + u'$').search(u(article))
 	return True
+def scheduleTask(task, oneinevery):
+	result = random.randint(0, oneinevery-1)
+	print 'Task:', task, '; result:', result
+	if not result:
+		task()
 def sFilter(filters, content, **kwargs):
 	content = u(content)
 	lenfilters = len(filters)
@@ -355,6 +585,15 @@ def linkFilter(filters, linklist, **kwargs):
 		for i in range(len(linklist)):
 			linklist[i] = f(linklist[i], **kwargs)
 	return linklist
+def templateFilter(filters, templatelist, **kwargs):
+	for f in filters:
+		if not filterEnabled(f, **kwargs):
+			continue
+		if type(f) is type(()):
+			f, params = f
+		for i in range(len(templatelist)):
+			templatelist[i] = f(templatelist[i], **kwargs)
+	return templatelist
 def linkTextFilter(filters, linklist, linksafe=False, **kwargs):
 	for i in range(len(linklist)):
 		l = linklist[i]
@@ -375,7 +614,7 @@ def dumbReplaces(rs):
 def dumbReplace(subject, replacement):
 	return dumbReplaces({subject: replacement})
 def wordRegex(word):
-	word = u(re.sub(r'[- ]+', r'[-_ ]', u(word)))
+	word = u(re.sub(r'[-_ ]+', r'[-_ ]', u(word)))
 	return u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + r")(?:\b|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + r")|$)")
 def wordFilter(correct, *badwords, **kwargs):
 	correct = u(correct)
@@ -455,6 +694,10 @@ def addLinkFilter(*fs, **kwargs):
 	global filters
 	for f in fs:
 		filters['link'].append((f, kwargs))
+def addTemplateFilter(*fs, **kwargs):
+	global filters
+	for f in fs:
+		filters['template'].append((f, kwargs))
 def fixContent(content, article=None):
 	global filters
 	content = u(content)
@@ -476,8 +719,12 @@ def fixContent(content, article=None):
 			linklist = linkTextFilter(filters['safe'], linklist, article=article)
 			content = sFilter(filters['safe'], content, article=article)
 			content = safeContentRestore(content, linklist, safelist)
-		if len(filters['link']):
+		if len(filters['link']) or len(filters['template']):
 			content, linklist = linkExtract(content)
+			if len(filters['template']):
+				content, templatelist = templateExtract(content)
+				templatelist = templateFilter(filters['template'], templatelist, article=article)
+				content = templateRestore(content, templatelist)
 			linklist = linkFilter(filters['link'], linklist, article=article)
 			content = linkRestore(content, linklist)
 	return content
@@ -705,4 +952,5 @@ def run():
 	except:
 		pass
 	print 'All done.'
-run()
+if __name__ == '__main__':
+	run()
