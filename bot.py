@@ -416,6 +416,7 @@ class template:
 			params = u' | '.join(params)
 		return u'{{' + params + u'}}'
 def linkExtract(content):
+	content = u(content)
 	links1 = compileRegex(r'\[\[([^\[\]]+)\]\]')
 	links2 = compileRegex(r'\[([^\[\]]+)\](?!\])')
 	linkcount = 0
@@ -434,6 +435,7 @@ def linkExtract(content):
 		res = links2.search(content)
 	return content, linklist
 def templateExtract(content):
+	content = u(content)
 	templatesR = compileRegex(r'\{\{([^\{\}]+)\}\}')
 	templatecount = 0
 	templatelist = []
@@ -720,13 +722,12 @@ def fixContent(content, article=None):
 			content = sFilter(filters['safe'], content, article=article)
 			content = safeContentRestore(content, linklist, safelist)
 		if len(filters['link']) or len(filters['template']):
+			content, templatelist = templateExtract(content)
 			content, linklist = linkExtract(content)
-			if len(filters['template']):
-				content, templatelist = templateExtract(content)
-				templatelist = templateFilter(filters['template'], templatelist, article=article)
-				content = templateRestore(content, templatelist)
 			linklist = linkFilter(filters['link'], linklist, article=article)
 			content = linkRestore(content, linklist)
+			templatelist = templateFilter(filters['template'], templatelist, article=article)
+			content = templateRestore(content, templatelist)
 	return content
 def fixPage(article, **kwargs):
 	article = page(article)
