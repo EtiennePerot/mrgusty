@@ -240,6 +240,7 @@ class template:
 		self.content = content
 		self.name = None
 		self.order = None
+		self.links = []
 		self.params = []
 		self.paramNum = 0
 		self.indentation = {}
@@ -247,7 +248,9 @@ class template:
 		if len(content) > 4 and content[:2] == '{{' and content[-2:] == '}}':
 			innerRegex = compileRegex(r'\s*\|\s*')
 			itemRegex = compileRegex(r'^(\S[^=]*?)\s*=\s*(.*?)$')
-			innerStuff = innerRegex.split(content[2:-2])
+			content = content[2:-2]
+			content, self.links = linkExtract(content)
+			innerStuff = innerRegex.split(content)
 			if innerStuff[0][:9].lower() == 'template:':
 				innerStuff[0] = innerStuff[0][9:]
 			self.name = u(innerStuff[0][0].upper() + innerStuff[0][1:]).replace(u'_', u' ').strip()
@@ -414,6 +417,7 @@ class template:
 			params = u'\n'.join(params) + u'\n'
 		else:
 			params = u' | '.join(params)
+		params = linkRestore(params, self.links)
 		return u'{{' + params + u'}}'
 def linkExtract(content):
 	content = u(content)
