@@ -544,15 +544,27 @@ def filterEnabled(f, **kwargs):
 		return True
 	if type(f[1]) is not type({}):
 		return True
-	if 'language' in f[1].keys():
-		if 'article' in kwargs.keys():
-			article = kwargs['article']
-			if article is None:
+	article = None
+	if 'article' in kwargs.keys():
+		article = kwargs['article']
+		if article is None:
+			return True
+		if type(article) not in (type(u''), type('')):
+			article = article.title
+	if article is None:
+		return True
+	if 'languageBlacklist' in f[1].keys():
+		for i in f[1]['languageBlacklist']:
+			if compileRegex(u'/' + u(i) + u'$').search(u(article)):
+				return False
+		return True
+	if 'languageWhitelist' in f[1].keys():
+		for i in f[1]['languageWhitelist']:
+			if compileRegex(u'/' + u(i) + u'$').search(u(article)):
 				return True
-			if type(article) not in (type(u''), type('')):
-				article = article.title
-			#print 'Article', article, 'vs', u'/' + u(f[1]['language']) + u'$', 'yields', (not not compileRegex(u'/' + u(f[1]['language']) + u'$').search(u(article)))
-			return compileRegex(u'/' + u(f[1]['language']) + u'$').search(u(article))
+		return False
+	if 'language' in f[1].keys():
+		return compileRegex(u'/' + u(f[1]['language']) + u'$').search(u(article))
 	return True
 def scheduleTask(task, oneinevery):
 	result = random.randint(0, oneinevery-1)
@@ -783,7 +795,7 @@ def loadPage(p):
 	except:
 		error('Couldn\'t grab page', p)
 	coderegex = compileRegex(r'^(?:  [^\r\n]*(?:[\r\n]+|$))+', re.MULTILINE)
-	trimcode = compileRegex(r'^  ', re.MULTILINE)
+	trimcode = compileRegex(r'^  |</?nowiki>', re.MULTILINE)
 	for m in coderegex.finditer(code):
 		try:
 			exec(trimcode.sub(u'', u(m.group())))
