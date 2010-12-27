@@ -233,7 +233,7 @@ class link:
 			return u'[' + tmpLink + u' ' + label + u']'
 		return self.getBody()
 class template:
-	maxInlineParams = 3
+	maxInlineParams = 1
 	def __init__(self, content):
 		content = u(content)
 		self.changed = False
