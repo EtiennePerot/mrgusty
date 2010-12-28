@@ -730,8 +730,7 @@ def fixContent(content, article=None):
 	loopTimes = 0
 	redirect = False
 	if len(content) > 9:
-		if content[:9] == u'#REDIRECT':
-			redirect = True
+		redirect = content[:9] == u'#REDIRECT'
 	while not loopTimes or content != oldcontent:
 		loopTimes += 1
 		if loopTimes > 2:
@@ -745,7 +744,8 @@ def fixContent(content, article=None):
 		# Apply safe filters
 		if len(filters['safe']):
 			content, linklist, safelist = safeContent(content)
-			linklist = linkTextFilter(filters['safe'], linklist, article=article, redirect=redirect)
+			if not redirect:
+				linklist = linkTextFilter(filters['safe'], linklist, article=article, redirect=redirect)
 			content = sFilter(filters['safe'], content, article=article, redirect=redirect)
 			content = safeContentRestore(content, linklist, safelist)
 		if len(filters['link']) or len(filters['template']):
