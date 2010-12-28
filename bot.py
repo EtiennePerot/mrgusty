@@ -99,7 +99,14 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 			summary = summary[:summary.rfind(u' ')] + u'...'
 		else:
 			summary = summary[:247] + u'...'
-	result = page(p).edit(u(content), summary=summary, minor=minor, bot=bot, nocreate=nocreate)
+	try:
+		if nocreate:
+			result = page(p).edit(u(content), summary=summary, minor=minor, bot=bot, nocreate=nocreate)
+		else:
+			result = page(p).edit(u(content), summary=summary, minor=minor, bot=bot)
+	except:
+		warning('Couldn\'t edit', p)
+		return None
 	try:
 		if result['edit']['result']:
 			config['runtime']['edits'] += 1
@@ -721,6 +728,10 @@ def fixContent(content, article=None):
 	content = u(content)
 	oldcontent = u''
 	loopTimes = 0
+	redirect = False
+	if len(content) > 9:
+		if content[:9] == u'#REDIRECT':
+			redirect = True
 	while not loopTimes or content != oldcontent:
 		loopTimes += 1
 		if loopTimes > 2:
@@ -730,19 +741,20 @@ def fixContent(content, article=None):
 			break
 		oldcontent = content
 		# Apply unsafe filters
-		content = sFilter(filters['regular'], content, article=article)
+		content = sFilter(filters['regular'], content, article=article, redirect=redirect)
 		# Apply safe filters
 		if len(filters['safe']):
 			content, linklist, safelist = safeContent(content)
-			linklist = linkTextFilter(filters['safe'], linklist, article=article)
-			content = sFilter(filters['safe'], content, article=article)
+			linklist = linkTextFilter(filters['safe'], linklist, article=article, redirect=redirect)
+			content = sFilter(filters['safe'], content, article=article, redirect=redirect)
 			content = safeContentRestore(content, linklist, safelist)
 		if len(filters['link']) or len(filters['template']):
 			content, templatelist = templateExtract(content)
 			content, linklist = linkExtract(content)
-			linklist = linkFilter(filters['link'], linklist, article=article)
+			if not redirect:
+				linklist = linkFilter(filters['link'], linklist, article=article, redirect=redirect)
 			content = linkRestore(content, linklist)
-			templatelist = templateFilter(filters['template'], templatelist, article=article)
+			templatelist = templateFilter(filters['template'], templatelist, article=article, redirect=redirect)
 			content = templateRestore(content, templatelist)
 	return content
 def fixPage(article, **kwargs):
