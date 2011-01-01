@@ -654,7 +654,7 @@ def wordFilter(correct, *badwords, **kwargs):
 	return regexes(rs)
 def enforceCapitalization(*words, **kwargs):
 	for w in words:
-		addSafeFilter(wordFilter(u(w), **kwargs))
+		addSafeFilter(wordFilter(u(w)), **kwargs)
 
 pageFilters = []
 categoryFilters = []
