@@ -629,7 +629,16 @@ def linkTextFilter(filters, linklist, linksafe=False, **kwargs):
 				l.setLabel(sFilter(filters, l.getLabel(), **kwargs))
 		linklist[i] = l
 	return linklist
-
+def linkDomainSub(fromDomain, toDomain, link, **kwargs):
+	domainR = compileRegex(r'^(https?://(?:[-\w]+\.)*)' + u(re.escape(fromDomain)) + r'(\S+)$')
+	toDomain = u(toDomain)
+	if link.getType() == 'external':
+		linkInfo = domainR.search(link.getLink())
+		if linkInfo:
+			link.setLink(u(linkInfo.group(1)) + toDomain + u(linkInfo.group(2)))
+	return link
+def linkDomainFilter(fromDomain, toDomain):
+	return curry(linkDomainSub, fromDomain, toDomain)
 def regexes(rs):
 	return curry(regSub, rs)
 def regex(reg, replace):
@@ -731,6 +740,8 @@ def fixContent(content, article=None):
 	redirect = False
 	if len(content) > 9:
 		redirect = content[:9] == u'#REDIRECT'
+	if article is not None:
+		article = page(article)
 	while not loopTimes or content != oldcontent:
 		loopTimes += 1
 		if loopTimes > 2:
