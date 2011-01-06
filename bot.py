@@ -608,7 +608,8 @@ def linkFilter(filters, linklist, **kwargs):
 		if type(f) is type(()):
 			f, params = f
 		for i in range(len(linklist)):
-			linklist[i] = f(linklist[i], **kwargs)
+			if linklist[i] is not None:
+				linklist[i] = f(linklist[i], **kwargs)
 	return linklist
 def templateFilter(filters, templatelist, **kwargs):
 	for f in filters:
