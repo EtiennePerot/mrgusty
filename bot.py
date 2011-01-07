@@ -424,7 +424,7 @@ class template:
 			params = u'\n'.join(params) + u'\n'
 		else:
 			params = u' | '.join(params)
-		params = linkRestore(params, self.links)
+		params = linkRestore(params, self.links, restore=True)
 		return u'{{' + params + u'}}'
 def linkExtract(content):
 	content = u(content)
@@ -471,7 +471,7 @@ def blankAround(content, search, repl=u''):
 		return content[:res.end(1)] + content[res.end(2):]
 	else:
 		return content[:res.start()] + content[res.start(2):]
-def linkRestore(content, linklist=[]):
+def linkRestore(content, linklist=[], restore=False):
 	linkcount = len(linklist)
 	i = 0
 	linklist.reverse()
@@ -480,6 +480,8 @@ def linkRestore(content, linklist=[]):
 		if l is None:
 			content = blankAround(content, u'~!~!~!~OMGLINK-' + u(linkcount - i) + u'~!~!~!~', u'')
 		else:
+			if restore:
+				l = l.getBody()
 			content = content.replace(u'~!~!~!~OMGLINK-' + u(linkcount - i) + u'~!~!~!~', u(l))
 	return content
 def templateRestore(content, templatelist=[]):
@@ -755,20 +757,14 @@ def fixContent(content, article=None):
 		# Apply unsafe filters
 		content = sFilter(filters['regular'], content, article=article, redirect=redirect)
 		# Apply safe filters
-		if len(filters['safe']):
-			content, linklist, safelist = safeContent(content)
-			if not redirect:
-				linklist = linkTextFilter(filters['safe'], linklist, article=article, redirect=redirect)
-			content = sFilter(filters['safe'], content, article=article, redirect=redirect)
-			content = safeContentRestore(content, linklist, safelist)
-		if len(filters['link']) or len(filters['template']):
-			content, templatelist = templateExtract(content)
-			content, linklist = linkExtract(content)
-			if not redirect:
-				linklist = linkFilter(filters['link'], linklist, article=article, redirect=redirect)
-			content = linkRestore(content, linklist)
-			templatelist = templateFilter(filters['template'], templatelist, article=article, redirect=redirect)
-			content = templateRestore(content, templatelist)
+		content, templatelist = templateExtract(content)
+		content, linklist = linkExtract(content)
+		content = sFilter(filters['safe'], content, article=article, redirect=redirect)
+		if not redirect:
+			linklist = linkFilter(filters['link'], linklist, article=article, redirect=redirect)
+		content = linkRestore(content, linklist)
+		templatelist = templateFilter(filters['template'], templatelist, article=article, redirect=redirect)
+		content = templateRestore(content, templatelist)
 	return content
 def fixPage(article, **kwargs):
 	article = page(article)
