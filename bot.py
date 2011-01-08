@@ -498,14 +498,6 @@ def templateRestore(content, templatelist=[]):
 def safeContent(content):
 	content, linklist = linkExtract(content)
 	safelist = []
-	templates = compileRegex(r'\{\{(?:(?!\{\{|\}\})[\s\S])+\}\}')
-	templatecount = 0
-	res = templates.search(content)
-	while res:
-		safelist.append(('~!~!~!~OMGTEMPLATE-' + u(templatecount) + u'~!~!~!~', u(res.group())))
-		content = content[:res.start()] + u'~!~!~!~OMGTEMPLATE-' + u(templatecount) + u'~!~!~!~' + content[res.end():]
-		templatecount += 1
-		res = templates.search(content)
 	tags = compileRegex(r'<(?:ref|gallery|pre|code)[^<>]*>[\S\s]*?</(?:ref|gallery|pre|code)>|^  [^\r\n]*', re.IGNORECASE | re.MULTILINE)
 	tagcount = 0
 	res = tags.search(content)
@@ -514,12 +506,11 @@ def safeContent(content):
 		content = content[:res.start()] + u'~!~!~!~OMGTAG-' + u(tagcount) + u'~!~!~!~' + content[res.end():]
 		tagcount += 1
 		res = tags.search(content)
-	return content, linklist, safelist
-def safeContentRestore(content, linklist=[], safelist=[]):
+	return content, safelist
+def safeContentRestore(content, safelist=[]):
 	safelist.reverse()
 	for s in safelist:
 		content = content.replace(s[0], s[1])
-	content = linkRestore(content, linklist)
 	return content
 
 def regReplaceCallBack(sub, match):
@@ -757,6 +748,7 @@ def fixContent(content, article=None):
 		# Apply unsafe filters
 		content = sFilter(filters['regular'], content, article=article, redirect=redirect)
 		# Apply safe filters
+		content, safelist = safeContent(content)
 		content, templatelist = templateExtract(content)
 		content, linklist = linkExtract(content)
 		content = sFilter(filters['safe'], content, article=article, redirect=redirect)
@@ -765,6 +757,7 @@ def fixContent(content, article=None):
 		content = linkRestore(content, linklist)
 		templatelist = templateFilter(filters['template'], templatelist, article=article, redirect=redirect)
 		content = templateRestore(content, templatelist)
+		content = safeContentRestore(content, safelist)
 	return content
 def fixPage(article, **kwargs):
 	article = page(article)
