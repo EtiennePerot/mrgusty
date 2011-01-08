@@ -497,7 +497,7 @@ def templateRestore(content, templatelist=[]):
 	return content
 def safeContent(content):
 	safelist = []
-	tags = compileRegex(r'<(?:ref|gallery|pre|code)[^<>]*>[\S\s]*?</(?:ref|gallery|pre|code)>|^  [^\r\n]*', re.IGNORECASE | re.MULTILINE)
+	tags = compileRegex(r'<(?:ref|gallery|pre|code)[^<>]*>[\S\s]*?</(?:ref|gallery|pre|code)>', re.IGNORECASE | re.MULTILINE)
 	tagcount = 0
 	res = tags.search(content)
 	while res:
