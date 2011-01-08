@@ -496,7 +496,6 @@ def templateRestore(content, templatelist=[]):
 			content = content.replace(u'~!~!~!~OMGTEMPLATE-' + u(templatecount - i) + u'~!~!~!~', u(t))
 	return content
 def safeContent(content):
-	content, linklist = linkExtract(content)
 	safelist = []
 	tags = compileRegex(r'<(?:ref|gallery|pre|code)[^<>]*>[\S\s]*?</(?:ref|gallery|pre|code)>|^  [^\r\n]*', re.IGNORECASE | re.MULTILINE)
 	tagcount = 0
