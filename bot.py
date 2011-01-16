@@ -613,16 +613,13 @@ def templateFilter(filters, templatelist, **kwargs):
 			if templatelist[i] is not None:
 				templatelist[i] = f(templatelist[i], **kwargs)
 	return templatelist
-def linkTextFilter(filters, linklist, linksafe=False, **kwargs):
-	for i in range(len(linklist)):
-		l = linklist[i]
-		if l.getType() == u'internal' and l.getLink().find(u':') == -1 and pageFilter(l.getLink()):
-			if linksafe:
-				l.setLink(sFilter(filters, l.getLink(), **kwargs))
-			if l.getLabel().find(u':') == -1:
-				l.setLabel(sFilter(filters, l.getLabel(), **kwargs))
-		linklist[i] = l
-	return linklist
+def linkTextFilter(subfilters, l, linksafe=False, **kwargs):
+	if l.getType() == u'internal' and l.getLink().find(u':') == -1 and pageFilter(l.getLink()):
+		if linksafe:
+			l.setLink(sFilter(subfilters, l.getLink(), **kwargs))
+		if l.getLabel().find(u':') == -1:
+			l.setLabel(sFilter(subfilters, l.getLabel(), **kwargs))
+	return l
 def linkDomainSub(fromDomain, toDomain, link, **kwargs):
 	domainR = compileRegex(r'^(https?://(?:[-\w]+\.)*)' + u(re.escape(fromDomain)) + r'(\S+)$')
 	toDomain = u(toDomain)
@@ -751,6 +748,7 @@ def fixContent(content, article=None):
 		content, templatelist = templateExtract(content)
 		content, linklist = linkExtract(content)
 		content = sFilter(filters['safe'], content, article=article, redirect=redirect)
+		addLinkFilter(curry(linkTextFilter, filters['safe']))
 		if not redirect:
 			linklist = linkFilter(filters['link'], linklist, article=article, redirect=redirect)
 		content = linkRestore(content, linklist)
