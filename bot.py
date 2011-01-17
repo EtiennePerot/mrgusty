@@ -63,7 +63,9 @@ class curry:
 		self.pending = args[:]
 		self.kwargs = kwargs
 	def __str__(self):
-		return u'<DamnCurry of ' + u(self.func) + u'; args = ' + u(self.pending) + u'; kwargs = ' + u(self.kwargs) + u'>'
+		if u(self.func) == u(regSub):
+			return 'Regex' + u(self.pending)
+		return u'<Curry of ' + u(self.func) + u'; args = ' + u(self.pending) + u'; kwargs = ' + u(self.kwargs) + u'>'
 	def __repr__(self):
 		return self.__str__()
 	def __call__(self, *args, **kwargs):
@@ -751,6 +753,8 @@ def filterRepr(filters):
 			filterR = u(res.group(1))
 			if filterR not in s:
 				s.append(filterR)
+		elif u(f) not in s:
+			s.append(u(s))
 	return u', '.join(s)
 def fixContent(content, article=None, returnActive=False, **kwargs):
 	global filters
