@@ -263,7 +263,7 @@ class template:
 			self.name = u(innerStuff[0][0].upper() + innerStuff[0][1:]).replace(u'_', u' ').strip()
 			innerStuff = innerStuff[1:]
 			for i in innerStuff:
-				i = linkRestore(i.strip(), self.links)
+				i = linkRestore(i.strip(), self.links, restore=True)
 				itemRes = itemRegex.search(i)
 				if itemRes:
 					self.params.append((u(itemRes.group(1)), u(itemRes.group(2))))
@@ -424,7 +424,6 @@ class template:
 			params = u'\n'.join(params) + u'\n'
 		else:
 			params = u' | '.join(params)
-		params = linkRestore(params, self.links, restore=True)
 		return u'{{' + params + u'}}'
 def linkExtract(content):
 	content = u(content)
@@ -471,7 +470,8 @@ def blankAround(content, search, repl=u''):
 		return content[:res.end(1)] + content[res.end(2):]
 	else:
 		return content[:res.start()] + content[res.start(2):]
-def linkRestore(content, linklist=[], restore=False):
+def linkRestore(content, links=[], restore=False):
+	linklist=links[:]
 	linkcount = len(linklist)
 	i = 0
 	linklist.reverse()
@@ -570,13 +570,16 @@ def scheduleTask(task, oneinevery):
 	print 'Task:', task, '; result:', result
 	if not result:
 		task()
-def sFilter(filters, content, **kwargs):
+def sFilter(filters, content, returnActive=False, **kwargs):
 	content = u(content)
 	lenfilters = len(filters)
 	if not lenfilters:
+		if returnActive:
+			return content, []
 		return content
 	oldcontent = content
 	filtercount = 0
+	activeFilters = []
 	for f in filters:
 		if not filterEnabled(f, **kwargs):
 			continue
@@ -592,8 +595,13 @@ def sFilter(filters, content, **kwargs):
 				break
 			oldcontent = content
 			content = u(f(content, **kwargs))
+			if content != oldcontent and f not in activeFilters:
+				activeFilters.append(f)
+	if returnActive:
+		return content, activeFilters
 	return content
-def linkFilter(filters, linklist, **kwargs):
+def linkFilter(filters, linklist, returnActive=False, **kwargs):
+	activeFilters = []
 	for f in filters:
 		if not filterEnabled(f, **kwargs):
 			continue
@@ -601,9 +609,15 @@ def linkFilter(filters, linklist, **kwargs):
 			f, params = f
 		for i in range(len(linklist)):
 			if linklist[i] is not None:
+				oldLink = u(linklist[i])
 				linklist[i] = f(linklist[i], **kwargs)
+				if oldLink != u(linklist[i]) and f not in activeFilters:
+					activeFilters.append(f)
+	if returnActive:
+		return linklist, activeFilters
 	return linklist
-def templateFilter(filters, templatelist, **kwargs):
+def templateFilter(filters, templatelist, returnActive=False, **kwargs):
+	activeFilters = []
 	for f in filters:
 		if not filterEnabled(f, **kwargs):
 			continue
@@ -611,7 +625,12 @@ def templateFilter(filters, templatelist, **kwargs):
 			f, params = f
 		for i in range(len(templatelist)):
 			if templatelist[i] is not None:
+				oldTemplate = u(templatelist[i])
 				templatelist[i] = f(templatelist[i], **kwargs)
+				if oldTemplate != u(templatelist[i]) and f not in activeFilters:
+					activeFilters.append(f)
+	if returnActive:
+		return templatelist, activeFilters
 	return templatelist
 def linkTextFilter(subfilters, l, linksafe=False, **kwargs):
 	if l.getType() == u'internal' and l.getLink().find(u':') == -1 and pageFilter(l.getLink()):
@@ -723,12 +742,23 @@ def addTemplateFilter(*fs, **kwargs):
 	global filters
 	for f in fs:
 		filters['template'].append((f, kwargs))
-def fixContent(content, article=None, **kwargs):
+def filterRepr(filters):
+	s = []
+	reprRegex = compileRegex(r'^<function (\S+)')
+	for f in filters:
+		res = reprRegex.search(u(f))
+		if res:
+			filterR = u(res.group(1))
+			if filterR not in s:
+				s.append(filterR)
+	return u', '.join(s)
+def fixContent(content, article=None, returnActive=False, **kwargs):
 	global filters
 	content = u(content)
 	oldcontent = u''
 	loopTimes = 0
 	redirect = False
+	activeFilters = []
 	if len(content) > 9:
 		redirect = content[:9] == u'#REDIRECT'
 	if article is not None:
@@ -742,19 +772,25 @@ def fixContent(content, article=None, **kwargs):
 			break
 		oldcontent = content
 		# Apply unsafe filters
-		content = sFilter(filters['regular'], content, article=article, redirect=redirect)
+		content, activeF = sFilter(filters['regular'], content, returnActive=True, article=article, redirect=redirect)
+		activeFilters.extend(activeF)
 		# Apply safe filters
 		content, safelist = safeContent(content)
 		content, templatelist = templateExtract(content)
 		content, linklist = linkExtract(content)
-		content = sFilter(filters['safe'], content, article=article, redirect=redirect)
+		content, activeF = sFilter(filters['safe'], content, returnActive=True, article=article, redirect=redirect)
+		activeFilters.extend(activeF)
 		addLinkFilter(curry(linkTextFilter, filters['safe']))
 		if not redirect:
-			linklist = linkFilter(filters['link'], linklist, article=article, redirect=redirect)
+			linklist, activeF = linkFilter(filters['link'], linklist, returnActive=True, article=article, redirect=redirect)
+			activeFilters.extend(activeF)
 		content = linkRestore(content, linklist)
-		templatelist = templateFilter(filters['template'], templatelist, article=article, redirect=redirect)
+		templatelist, activeF = templateFilter(filters['template'], templatelist, returnActive=True, article=article, redirect=redirect)
+		activeFilters.extend(activeF)
 		content = templateRestore(content, templatelist)
 		content = safeContentRestore(content, safelist)
+	if returnActive:
+		return content, activeFilters
 	return content
 def fixPage(article, **kwargs):
 	article = page(article)
@@ -772,10 +808,10 @@ def fixPage(article, **kwargs):
 		print 'Skipping:', article
 		return
 	originalContent = u(article.getWikiText())
-	content = fixContent(originalContent, article=article)
+	content, activeFilters = fixContent(originalContent, returnActive=True, article=article)
 	if content != originalContent:
 		print article, 'needs to be updated.'
-		summary = u'Applied filters to [[:' + u(article.title) + u']]'
+		summary = u'Filtered [[:' + u(article.title) + u']]: ' + filterRepr(activeFilters)
 		if 'reason' in kwargs:
 			summary += u' (' + u(kwargs['reason']) + u')'
 		if 'fake' in kwargs:
