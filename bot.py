@@ -263,7 +263,7 @@ class template:
 			self.name = u(innerStuff[0][0].upper() + innerStuff[0][1:]).replace(u'_', u' ').strip()
 			innerStuff = innerStuff[1:]
 			for i in innerStuff:
-				i = i.strip()
+				i = linkRestore(i.strip(), self.links)
 				itemRes = itemRegex.search(i)
 				if itemRes:
 					self.params.append((u(itemRes.group(1)), u(itemRes.group(2))))
@@ -723,7 +723,7 @@ def addTemplateFilter(*fs, **kwargs):
 	global filters
 	for f in fs:
 		filters['template'].append((f, kwargs))
-def fixContent(content, article=None):
+def fixContent(content, article=None, **kwargs):
 	global filters
 	content = u(content)
 	oldcontent = u''
