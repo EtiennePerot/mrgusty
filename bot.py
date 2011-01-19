@@ -33,7 +33,8 @@ config['runtime'] = {
 	'wiki': None,
 	'edits': 0,
 	'patrolled': [],
-	'regexes': {}
+	'regexes': {},
+	'pages': {}
 }
 
 def u(s):
@@ -90,9 +91,17 @@ def wiki():
 		print 'Logged in.'
 	return config['runtime']['wiki']
 def page(p):
+	global config
 	if type(p) in (type(''), type(u'')):
-		p = wikitools.page.Page(wiki(), u(p), followRedir=False)
-	return p
+		p = u(p)
+		if p not in config['runtime']['pages']:
+			config['runtime']['pages'][p] = wikitools.page.Page(wiki(), p, followRedir=False)
+		return config['runtime']['pages'][p]
+	# Else, it is a page object
+	title = u(p.title)
+	if title not in config['runtime']['pages']:
+		config['runtime']['pages'][title] = p
+	return config['runtime']['pages'][title]
 def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 	global config
 	summary = u(summary)
@@ -592,12 +601,12 @@ def sFilter(filters, content, returnActive=False, **kwargs):
 		loopTimes = 0
 		while not loopTimes or oldcontent != content:
 			loopTimes += 1
-			if loopTimes >= 1024:
-				print 'Warning: More than 1024 loops with filter', f
+			if loopTimes >= config['filterPasses']:
+				print 'Warning: More than', config['filterPasses'], 'loops with filter', u(f)
 				break
-			oldcontent = content
+			beforeFilter = content
 			content = u(f(content, **kwargs))
-			if content != oldcontent and f not in activeFilters:
+			if content != beforeFilter and f not in activeFilters:
 				activeFilters.append(f)
 	if returnActive:
 		return content, activeFilters
@@ -771,8 +780,8 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 		loopTimes += 1
 		if loopTimes > 2:
 			print 'Pass', loopTimes, 'on', article
-		if loopTimes >= 1024:
-			print 'Warning: More than 1024 fix passes on article', article
+		if loopTimes >= config['pagePasses']:
+			print 'Warning: More than', config['pagePasses'], 'fix passes on article', u(article.title)
 			break
 		oldcontent = content
 		# Apply unsafe filters
@@ -829,7 +838,9 @@ def fixPage(article, **kwargs):
 	return False
 def patrol(change):
 	global config
-	if int(change['rcid']) <= config['runtime']['rcid'] or not pageFilter(change['title']) or change['title'] in config['runtime']['patrolled']:
+	secondsElapsed = (datetime.datetime.utcnow() - datetime.datetime.fromtimestamp(time.mktime(time.strptime(change['timestamp'], r'%Y-%m-%dT%H:%M:%SZ'))))
+	totalTime = secondsElapsed.seconds + secondsElapsed.days * 86400
+	if int(change['rcid']) <= config['runtime']['rcid'] or not pageFilter(change['title']) or change['title'] in config['runtime']['patrolled'] or totalTime <= config['freshnessThreshold']:
 		print 'Skipping', change['rcid'], change['title']
 		if int(change['rcid']) > config['runtime']['rcid']:
 			config['runtime']['rcid'] = int(change['rcid'])
