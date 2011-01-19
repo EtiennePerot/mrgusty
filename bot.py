@@ -32,7 +32,6 @@ config['runtime'] = {
 	'onlinercid': -1,
 	'wiki': None,
 	'edits': 0,
-	'patrolled': [],
 	'regexes': {},
 	'pages': {}
 }
@@ -840,7 +839,7 @@ def patrol(change):
 	global config
 	secondsElapsed = (datetime.datetime.utcnow() - datetime.datetime.fromtimestamp(time.mktime(time.strptime(change['timestamp'], r'%Y-%m-%dT%H:%M:%SZ'))))
 	totalTime = secondsElapsed.seconds + secondsElapsed.days * 86400
-	if int(change['rcid']) <= config['runtime']['rcid'] or not pageFilter(change['title']) or change['title'] in config['runtime']['patrolled'] or totalTime <= config['freshnessThreshold']:
+	if int(change['rcid']) <= config['runtime']['rcid'] or not pageFilter(change['title']) or totalTime <= config['freshnessThreshold']:
 		print 'Skipping', change['rcid'], change['title']
 		if int(change['rcid']) > config['runtime']['rcid']:
 			config['runtime']['rcid'] = int(change['rcid'])
@@ -848,7 +847,6 @@ def patrol(change):
 	print 'Patrolling', change['title']
 	config['runtime']['rcid'] = int(change['rcid'])
 	result = fixPage(change['title'], reason=u'Review RC#' + u(change['rcid']))
-	config['runtime']['patrolled'].append(change['title'])
 	updateRCID()
 def loadPage(p):
 	p = page(p)
@@ -874,7 +872,14 @@ def patrolChanges():
 		recentChanges.reverse()
 	except:
 		error('Error while trying to grab recent changes.')
+	uniquePages = []
+	uniqueChanges = {}
 	for change in recentChanges:
+		if change['title'] not in uniquePages:
+			uniquePages.append(change['title'])
+		uniqueChanges[change['title']] = change
+	for title in uniquePages:
+		change = uniqueChanges[title]
 		try:
 			patrol(change)
 		except KeyboardInterrupt:
