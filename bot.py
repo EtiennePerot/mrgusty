@@ -762,7 +762,7 @@ def filterRepr(filters):
 			if filterR not in s:
 				s.append(filterR)
 		elif u(f) not in s:
-			s.append(u(s))
+			s.append(u(f))
 	return u', '.join(s)
 def fixContent(content, article=None, returnActive=False, **kwargs):
 	global filters
