@@ -1023,6 +1023,9 @@ def run():
 	global config
 	print 'Bot started.'
 	loadPage(config['pages']['filters'])
+	for p in sys.argv[1:]:
+		print 'Forced update to', p, '...'
+		fixPage(p)
 	loadBlacklist()
 	patrolChanges()
 	updateRCID()
