@@ -25,8 +25,10 @@ import cStringIO as StringIO
 import wikitools
 import wikiUpload
 import feedparser
+import steam
 
 from botConfig import config
+steam.set_api_key(config['steamAPI'])
 config['runtime'] = {
 	'rcid': -1,
 	'onlinercid': -1,
@@ -276,7 +278,7 @@ class template:
 				i = linkRestore(i.strip(), self.links, restore=True)
 				itemRes = itemRegex.search(i)
 				if itemRes:
-					self.params.append((u(itemRes.group(1)), u(itemRes.group(2))))
+					self.params.append((u(itemRes.group(1)).lower(), u(itemRes.group(2))))
 				else:
 					self.paramNum += 1
 					self.params.append((u(self.paramNum), i))
@@ -292,7 +294,7 @@ class template:
 		self.name = u(name).replace(u'_', u' ')
 		self.changed = self.changed or self.name != self.originalName
 	def getParam(self, key):
-		key = u(key)
+		key = u(key).lower()
 		for k, v in self.params:
 			if k == key:
 				return v
@@ -316,7 +318,7 @@ class template:
 		if index is None:
 			index = u(self.paramNum)
 		else:
-			index = u(index)
+			index = u(index).lower()
 		isNumber = self.isInt(index)
 		value = u(value)
 		hasChanged = False
@@ -350,7 +352,7 @@ class template:
 		oldParams = self.params[:]
 		self.changed = self.changed or self.fixOrder() == oldParams
 	def renameParam(self, oldkey, newkey):
-		oldkey, newkey = u(oldkey), u(newkey)
+		oldkey, newkey = u(oldkey).lower(), u(newkey).lower()
 		if oldkey == newkey:
 			return
 		for p in range(len(self.params)):
