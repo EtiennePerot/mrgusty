@@ -17,6 +17,7 @@ import sys
 import os
 import time, datetime
 import re
+import hashlib
 import urllib2
 import traceback
 import random
@@ -589,7 +590,6 @@ def sFilter(filters, content, returnActive=False, **kwargs):
 		if returnActive:
 			return content, []
 		return content
-	oldcontent = content
 	filtercount = 0
 	activeFilters = []
 	for f in filters:
@@ -600,7 +600,8 @@ def sFilter(filters, content, returnActive=False, **kwargs):
 		filtercount += 1
 		#print 'Filter', f, '(', filtercount, '/', lenfilters, ')'
 		loopTimes = 0
-		while not loopTimes or oldcontent != content:
+		beforeFilter = u''
+		while not loopTimes or beforeFilter != content:
 			loopTimes += 1
 			if loopTimes >= config['filterPasses']:
 				print 'Warning: More than', config['filterPasses'], 'loops with filter', u(f)
@@ -688,9 +689,10 @@ def enforceCapitalization(*words, **kwargs):
 		addSafeFilter(wordFilter(u(w)), **kwargs)
 
 pageFilters = []
+pageWhitelist = []
 categoryFilters = []
 def pageFilter(page):
-	global pageFilters
+	global pageFilters, pageWhitelist
 	if type(page) in (type(()), type([])):
 		pages = []
 		for p in page:
@@ -700,6 +702,8 @@ def pageFilter(page):
 	if type(page) not in (type(u''), type('')):
 		page = page.title
 	page = u(page)
+	if page in pageWhitelist:
+		return True
 	for f in pageFilters:
 		if f.search(page):
 			return False
@@ -714,10 +718,17 @@ def categoryFilter(page):
 def addPageFilter(*filters):
 	global pageFilters
 	for f in filters:
-		pageFilters.append(compileRegex(u(f), re.IGNORECASE))
+		pageFilters.append(compileRegex(f))
 def addBlacklistPage(*pages):
 	for p in pages:
 		addPageFilter(re.escape(u(p)))
+def addWhitelistPage(*pages):
+	global pageWhitelist
+	for p in pages:
+		if type(p) in (type([]), type(())):
+			addWhitelistPage(*p)
+		elif u(p) not in pageWhitelist:
+			pageWhitelist.append(u(p))
 def addBlacklistCategory(*categories):
 	global categoryFilters
 	for c in categories:
@@ -879,7 +890,11 @@ def patrolChanges():
 	for change in recentChanges:
 		if change['title'] not in uniquePages:
 			uniquePages.append(change['title'])
-		uniqueChanges[change['title']] = change
+		if change['title'] not in uniqueChanges or uniqueChanges[change['title']]['rcid'] < change['rcid']:
+			uniqueChanges[change['title']] = change
+			# Move page to end of queue
+			uniquePages.remove(change['title'])
+			uniquePages.append(change['title'])
 	for title in uniquePages:
 		change = uniqueChanges[title]
 		try:
