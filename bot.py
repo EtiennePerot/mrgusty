@@ -168,6 +168,11 @@ def error(*info):
 	warning(*info)
 	sys.exit(1)
 
+def setFilterName(f, name):
+	name = u(name)
+	f.__unicode__ = lambda: name
+	f.__str__ = lambda: name.encode('utf8')
+	f.filterName = name
 class link:
 	def __init__(self, content):
 		content = u(content)
@@ -672,9 +677,13 @@ def regexes(rs):
 def regex(reg, replace):
 	return regexes({reg: replace})
 def dumbReplaces(rs):
-	return curry(dumbReplacement, rs)
+	f = curry(dumbReplacement, rs)
+	setFilterName(f, u'DumbReplacements(' + u(rs) + u')')
+	return f
 def dumbReplace(subject, replacement):
-	return dumbReplaces({subject: replacement})
+	f = dumbReplaces({subject: replacement})
+	setFilterName(f, u'DumbReplacement(' + u(subject) + u' -> ' + u(replacement) + u')')
+	return f
 def wordRegex(word):
 	word = u(re.sub(r'[-_ ]+', r'[-_ ]', u(word)))
 	return u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + r")(?:\b|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + r")|$)")
@@ -688,10 +697,14 @@ def wordFilter(correct, *badwords, **kwargs):
 		badwords2.append(correct)
 	for w in badwords2:
 		rs[wordRegex(w)] = correct
-	return regexes(rs)
+	f = regexes(rs)
+	setFilterName(f, u'WordFilter(' + u'/'.join(badwords2) + u' -> ' + correct + u')')
+	return f
 def enforceCapitalization(*words, **kwargs):
 	for w in words:
-		addSafeFilter(wordFilter(u(w)), **kwargs)
+		f = wordFilter(u(w))
+		setFilterName(f, u'EnforceCapitalization(' + u(w) + u')')
+		addSafeFilter(f, **kwargs)
 
 pageFilters = []
 pageWhitelist = []
@@ -774,13 +787,19 @@ def filterRepr(filters):
 	s = []
 	reprRegex = compileRegex(r'^<function (\S+)')
 	for f in filters:
-		res = reprRegex.search(u(f))
-		if res:
-			filterR = u(res.group(1))
-			if filterR not in s:
-				s.append(filterR)
-		elif u(f) not in s:
-			s.append(u(f))
+		try:
+			name = f.filterName
+			s.append(name)
+		except:
+			res = reprRegex.search(u(f))
+			if res:
+				filterR = u(res.group(1))
+				if filterR not in s:
+					s.append(filterR)
+			elif u(f) not in s:
+				s.append(u(f))
+	if not len(s):
+		return u'Built-in filters' # Link simplification, template formatting, etc
 	return u', '.join(s)
 def fixContent(content, article=None, returnActive=False, **kwargs):
 	global filters
