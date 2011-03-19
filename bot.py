@@ -511,13 +511,18 @@ def templateRestore(content, templatelist=[]):
 def safeContent(content):
 	safelist = []
 	tags = compileRegex(r'<(?:ref|gallery|pre|code)[^<>]*>[\S\s]*?</(?:ref|gallery|pre|code)>', re.IGNORECASE | re.MULTILINE)
+	comments = compileRegex(r'<!--[\S\s]*?-->')
 	tagcount = 0
 	res = tags.search(content)
+	if not res:
+		res = comments.search(content)
 	while res:
 		safelist.append(('~!~!~!~OMGTAG-' + u(tagcount) + u'~!~!~!~', u(res.group())))
 		content = content[:res.start()] + u'~!~!~!~OMGTAG-' + u(tagcount) + u'~!~!~!~' + content[res.end():]
 		tagcount += 1
 		res = tags.search(content)
+		if not res:
+			res = comments.search(content)
 	return content, safelist
 def safeContentRestore(content, safelist=[]):
 	safelist.reverse()
