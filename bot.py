@@ -766,14 +766,28 @@ def addFilterType(filterType, *fs, **kwargs):
 		f = (f, kwargs)
 		if f not in filters[filterType]:
 			filters[filterType].append(f)
+def delFilterType(filterType, *fs, **kwargs):
+	global filters
+	for f in fs:
+		f = (f, kwargs)
+		if f in filters[filterType]:
+			filters[filterType].remove(f)
 def addFilter(*fs, **kwargs):
 	addFilterType('regular', *fs, **kwargs)
+def delFilter(*fs, **kwargs):
+	delFilterType('regular', *fs, **kwargs)
 def addSafeFilter(*fs, **kwargs):
 	addFilterType('safe', *fs, **kwargs)
+def delSafeFilter(*fs, **kwargs):
+	delFilterType('safe', *fs, **kwargs)
 def addLinkFilter(*fs, **kwargs):
 	addFilterType('link', *fs, **kwargs)
+def delLinkFilter(*fs, **kwargs):
+	delFilterType('link', *fs, **kwargs)
 def addTemplateFilter(*fs, **kwargs):
 	addFilterType('template', *fs, **kwargs)
+def delTemplateFilter(*fs, **kwargs):
+	delFilterType('template', *fs, **kwargs)
 def filterRepr(filters):
 	s = []
 	reprRegex = compileRegex(r'^<function (\S+)')
@@ -822,7 +836,8 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 		content, linklist = linkExtract(content)
 		content, activeF = sFilter(filters['safe'], content, returnActive=True, article=article, redirect=redirect)
 		activeFilters.extend(activeF)
-		addLinkFilter(setFilterName(curry(linkTextFilter, filters['safe']), u'(Content filters applied to links)'))
+		extraLinks = setFilterName(curry(linkTextFilter, filters['safe']), u'(Content filters applied to links)')
+		addLinkFilter(extraLinks)
 		if not redirect:
 			linklist, activeF = linkFilter(filters['link'], linklist, returnActive=True, article=article, redirect=redirect)
 			activeFilters.extend(activeF)
@@ -831,6 +846,7 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 		activeFilters.extend(activeF)
 		content = templateRestore(content, templatelist)
 		content = safeContentRestore(content, safelist)
+		delLinkFilter(extraLinks)
 	if returnActive:
 		return content, activeFilters
 	return content
