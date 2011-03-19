@@ -173,6 +173,7 @@ def setFilterName(f, name):
 	f.__unicode__ = lambda: name
 	f.__str__ = lambda: name.encode('utf8')
 	f.filterName = name
+	return f
 class link:
 	def __init__(self, content):
 		content = u(content)
@@ -677,13 +678,9 @@ def regexes(rs):
 def regex(reg, replace):
 	return regexes({reg: replace})
 def dumbReplaces(rs):
-	f = curry(dumbReplacement, rs)
-	setFilterName(f, u'DumbReplacements(' + u(rs) + u')')
-	return f
+	return setFilterName(curry(dumbReplacement, rs), u'DumbReplacements(' + u(rs) + u')')
 def dumbReplace(subject, replacement):
-	f = dumbReplaces({subject: replacement})
-	setFilterName(f, u'DumbReplacement(' + u(subject) + u' -> ' + u(replacement) + u')')
-	return f
+	return setFilterName(dumbReplaces({subject: replacement}), u'DumbReplacement(' + u(subject) + u' -> ' + u(replacement) + u')')
 def wordRegex(word):
 	word = u(re.sub(r'[-_ ]+', r'[-_ ]', u(word)))
 	return u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + r")(?:\b|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + r")|$)")
@@ -697,14 +694,10 @@ def wordFilter(correct, *badwords, **kwargs):
 		badwords2.append(correct)
 	for w in badwords2:
 		rs[wordRegex(w)] = correct
-	f = regexes(rs)
-	setFilterName(f, u'WordFilter(' + u'/'.join(badwords2) + u' -> ' + correct + u')')
-	return f
+	return setFilterName(regexes(rs), u'WordFilter(' + u'/'.join(badwords2) + u' -> ' + correct + u')')
 def enforceCapitalization(*words, **kwargs):
 	for w in words:
-		f = wordFilter(u(w))
-		setFilterName(f, u'EnforceCapitalization(' + u(w) + u')')
-		addSafeFilter(f, **kwargs)
+		addSafeFilter(setFilterName(wordFilter(u(w)), u'EnforceCapitalization(' + u(w) + u')'), **kwargs)
 
 pageFilters = []
 pageWhitelist = []
@@ -767,26 +760,26 @@ filters ={
 	'link':[],
 	'template':[]
 }
+def addFilterType(filterType, *fs, **kwargs):
+	global filters
+	for f in fs:
+		f = (f, kwargs)
+		if f not in filters[filterType]:
+			filters[filterType].append(f)
 def addFilter(*fs, **kwargs):
-	global filters
-	for f in fs:
-		filters['regular'].append((f, kwargs))
+	addFilterType('regular', *fs, **kwargs)
 def addSafeFilter(*fs, **kwargs):
-	global filters
-	for f in fs:
-		filters['safe'].append((f, kwargs))
+	addFilterType('safe', *fs, **kwargs)
 def addLinkFilter(*fs, **kwargs):
-	global filters
-	for f in fs:
-		filters['link'].append((f, kwargs))
+	addFilterType('link', *fs, **kwargs)
 def addTemplateFilter(*fs, **kwargs):
-	global filters
-	for f in fs:
-		filters['template'].append((f, kwargs))
+	addFilterType('template', *fs, **kwargs)
 def filterRepr(filters):
 	s = []
 	reprRegex = compileRegex(r'^<function (\S+)')
 	for f in filters:
+		if type(f) in (type([]), type(())) and not len(f[1]):
+			f = f[0] # Omit parameters if there are none
 		try:
 			name = f.filterName
 			s.append(name)
@@ -829,7 +822,7 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 		content, linklist = linkExtract(content)
 		content, activeF = sFilter(filters['safe'], content, returnActive=True, article=article, redirect=redirect)
 		activeFilters.extend(activeF)
-		addLinkFilter(curry(linkTextFilter, filters['safe']))
+		addLinkFilter(setFilterName(curry(linkTextFilter, filters['safe']), u'(Content filters applied to links)'))
 		if not redirect:
 			linklist, activeF = linkFilter(filters['link'], linklist, returnActive=True, article=article, redirect=redirect)
 			activeFilters.extend(activeF)
