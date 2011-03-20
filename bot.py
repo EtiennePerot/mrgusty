@@ -19,6 +19,7 @@ import time, datetime
 import re
 import hashlib
 import urllib2
+import tempfile
 import traceback
 import random
 import subprocess
@@ -27,6 +28,7 @@ import wikitools
 import wikiUpload
 import feedparser
 import steam
+from wikiUpload import wikiUploader
 
 from botConfig import config
 steam.set_api_key(config['steamAPI'])
@@ -36,7 +38,8 @@ config['runtime'] = {
 	'wiki': None,
 	'edits': 0,
 	'regexes': {},
-	'pages': {}
+	'pages': {},
+	'uploader': wikiUploader(config['username'], config['password'], config['api'])
 }
 
 def u(s):
@@ -78,6 +81,10 @@ class curry:
 		else:
 			kw = kwargs or self.kwargs
 		return self.func(*(self.pending + args), **kw)
+def getTempFilename():
+	f = tempfile.mkstemp()
+	os.close(f[0]) # Damn you Python I just want a filename
+	return f[1]
 
 def wiki():
 	global config
@@ -126,6 +133,9 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 	except:
 		warning('Couldn\'t edit', p)
 	return result
+def uploadFile(filename, destfile, pagecontent='', license='', overwrite=False, reupload=False):
+	global config
+	return config['runtime']['uploader'].upload(filename, destfile, pagecontent, license, overwrite=overwrite, reupload=reupload)
 def updateRCID():
 	if abs(config['runtime']['rcid'] - config['runtime']['onlinercid']) >= config['rcidrate']:
 		print 'Updating last RCID...'
@@ -754,11 +764,12 @@ def loadBlacklist():
 				continue
 		addBlacklistPage(l)
 
-filters ={
-	'regular':[],
-	'safe':[],
-	'link':[],
-	'template':[]
+filters = {
+	'regular': [],
+	'safe': [],
+	'link': [],
+	'template': [],
+	'file': []
 }
 def addFilterType(filterType, *fs, **kwargs):
 	global filters
@@ -788,6 +799,10 @@ def addTemplateFilter(*fs, **kwargs):
 	addFilterType('template', *fs, **kwargs)
 def delTemplateFilter(*fs, **kwargs):
 	delFilterType('template', *fs, **kwargs)
+def addFileFilter(*fs, **kwargs):
+	addFilterType('file', *fs, **kwargs)
+def delFileFilter(*fs, **kwargs):
+	delFilterType('file', *fs, **kwargs)
 def filterRepr(filters):
 	s = []
 	reprRegex = compileRegex(r'^<function (\S+)')
@@ -847,6 +862,10 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 		content = templateRestore(content, templatelist)
 		content = safeContentRestore(content, safelist)
 		delLinkFilter(extraLinks)
+	if u(article.title)[:5] == 'File:':
+		# Apply file filters
+		content, activeF = sFilter(filters['file'], content, returnActive=True, article=article, redirect=redirect)
+		activeFilters.extend(activeF)
 	if returnActive:
 		return content, activeFilters
 	return content
