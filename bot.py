@@ -111,14 +111,17 @@ def page(p):
 	if title not in config['runtime']['pages']:
 		config['runtime']['pages'][title] = p
 	return config['runtime']['pages'][title]
-def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
-	global config
+def getSummary(summary):
 	summary = u(summary)
 	while len(summary) > 250:
 		if summary.find(u' ') == -1:
 			summary = summary[:summary.rfind(u' ')] + u'...'
 		else:
 			summary = summary[:247] + u'...'
+	return summary
+def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
+	global config
+	summary = getSummary(summary)
 	try:
 		if nocreate:
 			result = page(p).edit(u(content), summary=summary, minor=minor, bot=bot, nocreate=nocreate)
@@ -133,6 +136,10 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 	except:
 		warning('Couldn\'t edit', p)
 	return result
+def deletePage(p, summary=False):
+	if summary:
+		summary = getSummary(summary)
+	return page(p).delete(summary)
 def uploadFile(filename, destfile, pagecontent='', license='', overwrite=False, reupload=False):
 	global config
 	return config['runtime']['uploader'].upload(filename, destfile, pagecontent, license, overwrite=overwrite, reupload=reupload)
