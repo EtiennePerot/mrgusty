@@ -895,7 +895,7 @@ def fixPage(article, **kwargs):
 	content, activeFilters = fixContent(originalContent, returnActive=True, article=article)
 	if content != originalContent:
 		print article, 'needs to be updated.'
-		summary = u'Filtered [[:' + u(article.title) + u']]: ' + filterRepr(activeFilters)
+		summary = u'Auto: ' + filterRepr(activeFilters)
 		if 'reason' in kwargs:
 			summary += u' (' + u(kwargs['reason']) + u')'
 		if 'fake' in kwargs:
@@ -970,12 +970,11 @@ def parsePageRequest(l, links=[]):
 	if l.find(u':'):
 		if l[:l.find(u':')].lower() == 'category':
 			subpages = wikitools.category.Category(wiki(), l[l.find(u':')+1:]).getAllMembers(titleonly=True)
-			if len(subpages):
-				for s in subpages:
-					if s not in links:
-						links.append(s)
-						newLink, links = parsePageRequest(s, links=links)
-						content.append(newLink)
+			for s in subpages:
+				if s not in links:
+					links.append(s)
+					newLink, links = parsePageRequest(s, links=links)
+					content.append(newLink)
 	if len(content):
 		selfContent += u'\r\n' + u'\r\n'.join(content)
 	return selfContent, links
