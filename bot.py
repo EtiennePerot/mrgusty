@@ -566,7 +566,10 @@ def regReplaceCallBack(sub, match):
 def regSub(regexes, content, **kwargs):
 	content = u(content)
 	for regex in regexes.keys():
-		compiled = compileRegex(u(regex), re.IGNORECASE | re.DOTALL | re.MULTILINE)
+		if type(regex) in (type(()), type([])):
+			compiled = compileRegex(u(regex[0]), regex[1])
+		else:
+			compiled = compileRegex(u(regex), re.IGNORECASE | re.DOTALL | re.MULTILINE)
 		callback = curry(regReplaceCallBack, u(regexes[regex]))
 		oldcontent = u''
 		while content != oldcontent:
@@ -699,24 +702,41 @@ def dumbReplaces(rs):
 	return setFilterName(curry(dumbReplacement, rs), u'DumbReplacements(' + u(rs) + u')')
 def dumbReplace(subject, replacement):
 	return setFilterName(dumbReplaces({subject: replacement}), u'DumbReplacement(' + u(subject) + u' -> ' + u(replacement) + u')')
-def wordRegex(word):
+def wordRegex(word, **kwargs):
+	flags = None
+	if type(word) in (type(()), type([])):
+		flags = word[1]
+		word = word[0]
 	word = u(re.sub(r'[-_ ]+', r'[-_ ]', u(word)))
-	return u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + r")(?:\b|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + r")|$)")
+	word = u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + r")(?:\b|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + r")|$)")
+	if flags is None:
+		return word
+	return (word, flags)
 def wordFilter(correct, *badwords, **kwargs):
 	correct = u(correct)
 	rs = {}
 	badwords2 = []
 	for i in badwords:
-		badwords2.append(u(i))
+		if type(i) in (type(()), type([])):
+			badwords2.extend(map(u, i))
+		else:
+			badwords2.append(u(i))
 	if not len(badwords2):
 		badwords2.append(correct)
 	for w in badwords2:
-		rs[wordRegex(w)] = correct
+		if 'keepcapitalization' in kwargs and kwargs['keepcapitalization']:
+			if type(w) not in (type(()), type([])):
+				w = (w, 0)
+			else:
+				w = (w[0], 0)
+			rs[wordRegex(w, **kwargs)] = correct
+			rs[wordRegex((w[0][0].swapcase() + w[0][1:], w[1]), **kwargs)] = correct[0].swapcase() + correct[1:]
+		else:
+			rs[wordRegex(w, **kwargs)] = correct
 	return setFilterName(regexes(rs), u'WordFilter(' + u'/'.join(badwords2) + u' -> ' + correct + u')')
 def enforceCapitalization(*words, **kwargs):
 	for w in words:
 		addSafeFilter(setFilterName(wordFilter(u(w)), u'EnforceCapitalization(' + u(w) + u')'), **kwargs)
-
 pageFilters = []
 pageWhitelist = []
 categoryFilters = []
@@ -870,7 +890,7 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 		content = templateRestore(content, templatelist)
 		content = safeContentRestore(content, safelist)
 		delLinkFilter(extraLinks)
-	if u(article.title)[:5] == 'File:':
+	if article is not None and u(article.title)[:5] == 'File:':
 		# Apply file filters
 		content, activeF = sFilter(filters['file'], content, returnActive=True, article=article, redirect=redirect)
 		activeFilters.extend(activeF)
