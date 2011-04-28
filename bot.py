@@ -291,7 +291,7 @@ class template:
 		self.defaultIndent = 0
 		if len(content) > 4 and content[:2] == '{{' and content[-2:] == '}}':
 			innerRegex = compileRegex(r'\s*\|\s*')
-			itemRegex = compileRegex(r'^(\S[^=]*?)\s*=\s*(.*?)$')
+			itemRegex = compileRegex(r'^(\S[^=]*?)\s*=\s*([\s\S]*?)$')
 			content = content[2:-2]
 			content, self.links = linkExtract(content)
 			innerStuff = innerRegex.split(content)
