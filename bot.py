@@ -83,7 +83,7 @@ class curry:
 		return self.func(*(self.pending + args), **kw)
 def getTempFilename():
 	global config
-	f = tempfile.mkstemp(prefix=config['prefix'])
+	f = tempfile.mkstemp(prefix=config['tempPrefix'])
 	os.close(f[0]) # Damn you Python I just want a filename
 	return f[1]
 
