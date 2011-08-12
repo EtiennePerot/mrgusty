@@ -123,19 +123,27 @@ def getSummary(summary):
 def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 	global config
 	summary = getSummary(summary)
+	p = page(p)
+	print 'Editing', p.title, 'with summary', summary
 	try:
 		if nocreate:
-			result = page(p).edit(u(content), summary=summary, minor=minor, bot=bot, nocreate=nocreate)
+			if minor:
+				result = p.edit(u(content), summary=summary, minor=True, bot=bot, nocreate=nocreate)
+			else:
+				result = p.edit(u(content), summary=summary, notminor=True, bot=bot, nocreate=nocreate)
 		else:
-			result = page(p).edit(u(content), summary=summary, minor=minor, bot=bot)
+			if minor:
+				result = p.edit(u(content), summary=summary, minor=True, bot=bot)
+			else:
+				result = p.edit(u(content), summary=summary, notminor=True, bot=bot)
 	except:
-		warning('Couldn\'t edit', p)
+		warning('Couldn\'t edit', p.title)
 		return None
 	try:
 		if result['edit']['result']:
 			config['runtime']['edits'] += 1
 	except:
-		warning('Couldn\'t edit', p)
+		warning('Couldn\'t edit', p.title)
 	return result
 def deletePage(p, summary=False):
 	if summary:
@@ -610,11 +618,26 @@ def filterEnabled(f, **kwargs):
 	if 'language' in f[1].keys():
 		return compileRegex(u'/' + u(f[1]['language']) + u'$').search(u(article))
 	return True
+scheduledTasks = []
 def scheduleTask(task, oneinevery):
+	global scheduledTasks
 	result = random.randint(0, oneinevery-1)
 	print 'Task:', task, '; result:', result
 	if not result:
-		task()
+		scheduledTasks.append(task)
+def runScheduledTasks():
+	global scheduledTasks
+	if not len(scheduledTasks):
+		print 'No tasks scheduled.'
+		return
+	print 'Running scheduled tasks...'
+	for t in scheduledTasks:
+		print 'Running task:', t
+		try:
+			t()
+			print 'End of task:', t
+		except:
+			print 'Error while executing task:', t
 def sFilter(filters, content, returnActive=False, **kwargs):
 	content = u(content)
 	lenfilters = len(filters)
@@ -1128,6 +1151,7 @@ def run():
 	doPageRequests(force=True)
 	doPageRequests(force=False)
 	updateEditCount()
+	runScheduledTasks()
 	import rcNotify
 	rcNotify.main(once=True)
 	try:
