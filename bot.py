@@ -21,6 +21,7 @@ import hashlib
 import urllib2
 import tempfile
 import traceback
+import threading
 import random
 import subprocess
 import cStringIO as StringIO
@@ -81,6 +82,24 @@ class curry:
 		else:
 			kw = kwargs or self.kwargs
 		return self.func(*(self.pending + args), **kw)
+class BatchScheduler:
+	def __init__(self, concurrency=16):
+		self.concurrency = 16
+		self.tasks = []
+	def schedule(self, target, *args, **kwargs):
+		self.tasks.append((target, args, kwargs))
+	def execute(self):
+		while len(self.tasks):
+			pool = []
+			numThreads = min(self.concurrency, len(self.tasks))
+			for task in range(numThreads):
+				task = self.tasks[task]
+				t = threading.Thread(target=task[0], args=task[1], kwargs=task[2])
+				t.start()
+				pool.append(t)
+			for t in pool:
+				t.join()
+			self.tasks = self.tasks[numThreads:]
 def getTempFilename():
 	global config
 	f = tempfile.mkstemp(prefix=config['tempPrefix'])
