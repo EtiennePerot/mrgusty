@@ -25,6 +25,7 @@ import threading
 import random
 import subprocess
 import cStringIO as StringIO
+import shutil
 import wikitools
 import wikiUpload
 import feedparser
@@ -100,11 +101,14 @@ class BatchScheduler:
 			for t in pool:
 				t.join()
 			self.tasks = self.tasks[numThreads:]
-def getTempFilename():
+def getTempFilename(extension=None):
 	global config
-	f = tempfile.mkstemp(prefix=config['tempPrefix'])
+	if extension is None:
+		f = tempfile.mkstemp(prefix=config['tempPrefix'])
+	else:
+		f = tempfile.mkstemp(suffix=u'.' + u(extension), prefix=config['tempPrefix'])
 	os.close(f[0]) # Damn you Python I just want a filename
-	return f[1]
+	return u(f[1])
 
 def wiki():
 	global config
@@ -1115,7 +1119,7 @@ def parseLocaleFile(content, language='english', languages={}):
 				languages[u(key)] = {}
 			languages[u(key)][curlang] = u(value)
 		else:
-			pass #print 'Invalid line:', l.__repr__()
+			pass
 	return languages
 def languagesFilter(languages, commonto=None, prefix=None, suffix=None, exceptions=[]):
 	filtered = {}
@@ -1157,6 +1161,27 @@ def associateLocaleWordFilters(languages, fromLang, toLang, targetPageLang=None)
 			addSafeFilter(f)
 		else:
 			addSafeFilter(f, language=targetPageLang)
+def getRandBits():
+	return random.getrandbits(128)
+def getFileHash(filename):
+	h = hashlib.md5()
+	f = open(filename, 'rb')
+	for i in f.readlines():
+		h.update(i)
+	f.close()
+	return u(h.hexdigest())
+def deleteFile(*fs):
+	for f in fs:
+		try:
+			os.remove(tempFile)
+		except:
+			pass
+def programExists(programName):
+	try:
+		result = subprocess.call(['which', programName])
+		return result == 0
+	except:
+		return False
 def run():
 	global config
 	print 'Bot started.'
@@ -1171,8 +1196,11 @@ def run():
 	doPageRequests(force=False)
 	updateEditCount()
 	runScheduledTasks()
-	import rcNotify
-	rcNotify.main(once=True)
+	try:
+		import rcNotify
+		rcNotify.main(once=True)
+	except:
+		pass
 	try:
 		subprocess.Popen(['killall', 'cpulimit']).communicate()
 	except:
