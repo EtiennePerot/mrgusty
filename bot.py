@@ -1173,7 +1173,7 @@ def getFileHash(filename):
 def deleteFile(*fs):
 	for f in fs:
 		try:
-			os.remove(tempFile)
+			os.remove(f)
 		except:
 			pass
 def programExists(programName):
