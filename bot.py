@@ -29,7 +29,17 @@ import shutil
 import wikitools
 import wikiUpload
 import feedparser
-import steam
+# Hax for Python < 2.7
+try:
+	from collections import OrderedDict
+except:
+	from backport_OrderedDict import OrderedDict
+	import collections
+	collections.OrderedDict = OrderedDict
+try:
+	import steam
+except:
+	steam = None
 from wikiUpload import wikiUploader
 
 from botConfig import config
@@ -199,6 +209,25 @@ def updateEditCount(force=False):
 		config['runtime']['edits'] = 0
 	except:
 		warning('Couldn\'t update edit count.')
+
+# Because SOME LIBRARY will not use singletons, this has to be done at the bot level
+# rather than the individual filter level to avoid loading the damn thing twice.
+steamGameSchemas = {}
+def steamGetGameSchema(game):
+	global steamGameSchemas
+	if steam is None:
+		return None
+	if game not in steamGameSchemas:
+		steamGameSchemas[game] = game.item_schema()
+	return steamGameSchemas[game]
+steamGameAssets = {}
+def steamGetGameAssets(game):
+	global steamGameAssets
+	if steam is None:
+		return None
+	if game not in steamGameAssets:
+		steamGameAssets[game] = game.assets()
+	return steamGameAssets[game]
 
 def compileRegex(regex, flags=re.IGNORECASE):
 	global config
@@ -584,7 +613,6 @@ def safeContentRestore(content, safelist=[]):
 	for s in safelist:
 		content = content.replace(s[0], s[1])
 	return content
-
 def regReplaceCallBack(sub, match):
 	groupcount = 1
 	for g in match.groups():
