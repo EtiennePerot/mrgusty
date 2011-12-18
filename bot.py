@@ -43,7 +43,8 @@ except:
 from wikiUpload import wikiUploader
 
 from botConfig import config
-steam.set_api_key(config['steamAPI'])
+if steam is not None and 'steamAPI' in config:
+	steam.set_api_key(config['steamAPI'])
 config['runtime'] = {
 	'rcid': -1,
 	'onlinercid': -1,
