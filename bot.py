@@ -1022,8 +1022,8 @@ def loadPage(p):
 		code = u(p.getWikiText())
 	except:
 		error('Couldn\'t grab page', p)
-	coderegex = compileRegex(r'^(?:  [^\r\n]*(?:[\r\n]+|$))+', re.MULTILINE)
-	trimcode = compileRegex(r'^  |</?nowiki>', re.MULTILINE)
+	coderegex = compileRegex(r'^(?: [^\r\n]*(?:[\r\n]+|$))+', re.MULTILINE)
+	trimcode = compileRegex(r'^ |</?nowiki>', re.MULTILINE)
 	for m in coderegex.finditer(code):
 		try:
 			exec(trimcode.sub(u'', u(m.group())))
