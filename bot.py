@@ -728,7 +728,7 @@ def linkFilter(filters, linklist, returnActive=False, **kwargs):
 		if type(f) is type(()):
 			f, params = f
 		for i in range(len(linklist)):
-			if linklist[i] is not None:
+			if linklist[i] is not None and isinstance(linklist[i], link):
 				oldLink = u(linklist[i])
 				linklist[i] = f(linklist[i], **kwargs)
 				if oldLink != u(linklist[i]) and f not in activeFilters:
@@ -744,7 +744,7 @@ def templateFilter(filters, templatelist, returnActive=False, **kwargs):
 		if type(f) is type(()):
 			f, params = f
 		for i in range(len(templatelist)):
-			if templatelist[i] is not None:
+			if templatelist[i] is not None and isinstance(linklist[i], template):
 				oldTemplate = u(templatelist[i])
 				templatelist[i] = f(templatelist[i], **kwargs)
 				if oldTemplate != u(templatelist[i]) and f not in activeFilters:
