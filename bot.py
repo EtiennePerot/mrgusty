@@ -29,13 +29,6 @@ import shutil
 import wikitools
 import wikiUpload
 import feedparser
-# Hax for Python < 2.7
-try:
-	from collections import OrderedDict
-except:
-	from backport_OrderedDict import OrderedDict
-	import collections
-	collections.OrderedDict = OrderedDict
 try:
 	import steam
 except:
@@ -158,7 +151,10 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 	global config
 	summary = getSummary(summary)
 	p = page(p)
-	print 'Editing', p.title, 'with summary', summary
+	try:
+		print 'Editing', p.title, 'with summary', summary
+	except:
+		pass
 	try:
 		if nocreate:
 			if minor:
@@ -776,14 +772,14 @@ def regex(reg, replace):
 def dumbReplaces(rs):
 	return setFilterName(curry(dumbReplacement, rs), u'DumbReplacements(' + u(rs) + u')')
 def dumbReplace(subject, replacement):
-	return setFilterName(dumbReplaces({subject: replacement}), u'DumbReplacement(' + u(subject) + u' -> ' + u(replacement) + u')')
+	return setFilterName(dumbReplaces({subject: replacement}), u'DumbReplacement(' + u(subject) + u' \u2192 ' + u(replacement) + u')')
 def wordRegex(word, **kwargs):
 	flags = None
 	if type(word) in (type(()), type([])):
 		flags = word[1]
 		word = word[0]
 	word = u(re.sub(r'[-_ ]+', r'[-_ ]', u(word)))
-	word = u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + r")(?:\b|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + r")|$)")
+	word = u(r"(?<![\u00E8-\u00F8\xe8-\xf8\w])(?<!'')(?<!" + r'"' + ")(?:\\b|(?<=[ \\[\\]\\(\\):;.,\"'*\\xab\\xbb])|^)" + word + r"(?:\b(?![\u00E8-\u00F8\xe8-\xf8\w])(?!''|" + r'"' + ")|(?=[ \\[\\]\(\\):;.,\"'*\\xab\\xbb])|$)")
 	if flags is None:
 		return word
 	return (word, flags)
@@ -808,7 +804,7 @@ def wordFilter(correct, *badwords, **kwargs):
 			rs[wordRegex((w[0][0].swapcase() + w[0][1:], w[1]), **kwargs)] = correct[0].swapcase() + correct[1:]
 		else:
 			rs[wordRegex(w, **kwargs)] = correct
-	return setFilterName(regexes(rs), u'WordFilter(' + u'/'.join(badwords2) + u' -> ' + correct + u')')
+	return setFilterName(regexes(rs), u'WordFilter(' + u'/'.join(badwords2) + u' \u2192 ' + correct + u')')
 def enforceCapitalization(*words, **kwargs):
 	for w in words:
 		addSafeFilter(setFilterName(wordFilter(u(w)), u'EnforceCapitalization(' + u(w) + u')'), **kwargs)
