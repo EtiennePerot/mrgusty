@@ -257,6 +257,7 @@ class link:
 		self.setType(u'unknown')
 		self.setLabel(None)
 		self.setLink(u'')
+		self.anchor = None
 		self.joined = False
 		if len(content) > 2:
 			if content[:2] == u'[[' and content[-2:] == u']]':
@@ -266,12 +267,16 @@ class link:
 					lnk = split[0]
 					if lnk.find(u':') == -1:
 						lnk = lnk.replace(u'_', u' ')
+					anchor = None
+					if lnk.find(u'#') != -1:
+						lnk, anchor = lnk.split(u'#', 1)
+						self.setAnchor(anchor)
 					self.setLink(lnk)
 					if len(split) == 2:
 						self.setLabel(split[1])
 					else:
 						self.setLabel(split[0])
-						self.joined = True
+						self.joined = anchor is None
 			elif content[0] == u'[' and content[-1] == u']':
 				split = content[1:-1].split(u' ', 1)
 				self.setType(u'external')
@@ -284,8 +289,12 @@ class link:
 		return u(self.kind)
 	def getBody(self):
 		return u(self.body)
-	def getLink(self):
+	def getLink(self, withAnchor=False):
+		if withAnchor and self.getAnchor() is not None:
+			return u(self.link) + u'#' + self.getAnchor()
 		return u(self.link)
+	def getAnchor(self):
+		return self.anchor
 	def getLabel(self):
 		if self.label is None:
 			return None
@@ -297,9 +306,28 @@ class link:
 	def setBody(self, body):
 		self.body = u(body)
 	def setLink(self, link):
-		self.link = u(link)
+		link = u(link)
+		if self.getType() == u'internal' and link.find(u'#') != -1:
+			link, anchor = link.split(u'#', 1)
+			self.setAnchor(anchor)
+		self.link = link
 		if self.joined:
 			self.label = u(link)
+	replaceDots = compileRegex(r'(?:\.[a-f\d][a-f\d])+')
+	def _replaceDots(self, g):
+		s = ''
+		g = g.group(0)
+		for i in xrange(0, len(g), 3):
+			s += chr(int(g[i + 1:i + 3], 16))
+		return s.decode('utf8')
+	def setAnchor(self, anchor):
+		if self.getType() == u'internal':
+			u(anchor).replace(u'_', u' ')
+			try:
+				anchor = link.replaceDots.sub(self._replaceDots, anchor)
+			except:
+				pass
+			self.anchor = anchor
 	def setLabel(self, label):
 		if label is None:
 			self.label = None
@@ -313,7 +341,7 @@ class link:
 		return u'<Link-' + self.getType() + u': ' + self.__unicode__() + u'>'
 	def __unicode__(self):
 		label = self.getLabel()
-		tmpLink = self.getLink()
+		tmpLink = self.getLink(withAnchor=True)
 		if self.getType() == u'internal':
 			tmpLink2 = tmpLink.replace(u'_', u' ')
 			if label in (tmpLink2, tmpLink) or (label and tmpLink and (label[0].lower() == tmpLink[0].lower() and tmpLink[1:] == label[1:]) or (label[0].lower() == tmpLink2[0].lower() and tmpLink2[1:] == label[1:])):
