@@ -26,9 +26,13 @@ import random
 import subprocess
 import cStringIO as StringIO
 import shutil
+import itertools
 import wikitools
 import wikiUpload
-import feedparser
+try:
+	import feedparser
+except:
+	feedparser = None
 try:
 	import steam
 except:
@@ -378,14 +382,14 @@ class template:
 			innerRegex = compileRegex(r'\s*\|\s*')
 			itemRegex = compileRegex(r'^(\S[^=]*?)\s*=\s*([\s\S]*?)$')
 			content = content[2:-2]
-			content, self.links = linkExtract(content)
+			content, self.links, self.keys = linkExtract(content)
 			innerStuff = innerRegex.split(content)
 			if innerStuff[0][:9].lower() == 'template:':
 				innerStuff[0] = innerStuff[0][9:]
 			self.name = u(innerStuff[0][0].upper() + innerStuff[0][1:]).replace(u'_', u' ').strip()
 			innerStuff = innerStuff[1:]
 			for i in innerStuff:
-				i = linkRestore(i.strip(), self.links, restore=True)
+				i = linkRestore(i.strip(), self.links, self.keys, restore=True)
 				itemRes = itemRegex.search(i)
 				if itemRes:
 					self.params.append((u(itemRes.group(1)).lower(), u(itemRes.group(2))))
@@ -547,37 +551,43 @@ class template:
 		else:
 			params = u' | '.join(params)
 		return u'{{' + params + u'}}'
+extractKey = itertools.count()
+def getNewKey(): # Should be made threadsafe if threads are ever used
+	return next(extractKey)
 def linkExtract(content):
 	content = u(content)
 	links1 = compileRegex(r'\[\[([^\[\]]+)\]\]')
 	links2 = compileRegex(r'\[([^\[\]]+)\](?!\])')
-	linkcount = 0
-	linklist = []
+	linklist = {}
+	keys = []
 	res = links1.search(content)
 	while res:
-		linklist.append(link(res.group()))
-		content = content[:res.start()] + u'~!~!~!~OMGLINK-' + u(linkcount) + u'~!~!~!~' + content[res.end():]
-		linkcount += 1
+		key = getNewKey()
+		linklist[key] = link(res.group())
+		content = content[:res.start()] + u'~!~!~!~OMGLINK-' + u(key) + u'~!~!~!~' + content[res.end():]
+		keys.append(key)
 		res = links1.search(content)
 	res = links2.search(content)
 	while res:
-		linklist.append(link(res.group()))
-		content = content[:res.start()] + u'~!~!~!~OMGLINK-' + u(linkcount) + u'~!~!~!~' + content[res.end():]
-		linkcount += 1
+		key = getNewKey()
+		linklist[key] = link(res.group())
+		content = content[:res.start()] + u'~!~!~!~OMGLINK-' + u(key) + u'~!~!~!~' + content[res.end():]
+		keys.append(key)
 		res = links2.search(content)
-	return content, linklist
+	return content, linklist, keys
 def templateExtract(content):
 	content = u(content)
 	templatesR = compileRegex(r'\{\{([^\{\}]+)\}\}')
-	templatecount = 0
-	templatelist = []
+	templatelist = {}
+	keys = []
 	res = templatesR.search(content)
 	while res:
-		templatelist.append(template(res.group()))
-		content = content[:res.start()] + u'~!~!~!~OMGTEMPLATE-' + u(templatecount) + u'~!~!~!~' + content[res.end():]
-		templatecount += 1
+		key = getNewKey()
+		templatelist[key] = template(res.group())
+		content = content[:res.start()] + u'~!~!~!~OMGTEMPLATE-' + u(key) + u'~!~!~!~' + content[res.end():]
+		keys.append(key)
 		res = templatesR.search(content)
-	return content, templatelist
+	return content, templatelist, keys
 def blankAround(content, search, repl=u''):
 	content = u(content)
 	search = u(search)
@@ -592,50 +602,41 @@ def blankAround(content, search, repl=u''):
 		return content[:res.end(1)] + content[res.end(2):]
 	else:
 		return content[:res.start()] + content[res.start(2):]
-def linkRestore(content, links=[], restore=False):
-	linklist=links[:]
-	linkcount = len(linklist)
-	i = 0
-	linklist.reverse()
-	for l in linklist:
-		i += 1
+def linkRestore(content, links=[], keys=[], restore=False):
+	for k in reversed(keys):
+		l = links[k]
 		if l is None:
-			content = blankAround(content, u'~!~!~!~OMGLINK-' + u(linkcount - i) + u'~!~!~!~', u'')
+			content = blankAround(content, u'~!~!~!~OMGLINK-' + u(k) + u'~!~!~!~', u'')
 		else:
 			if restore:
 				l = l.getBody()
-			content = content.replace(u'~!~!~!~OMGLINK-' + u(linkcount - i) + u'~!~!~!~', u(l))
+			content = content.replace(u'~!~!~!~OMGLINK-' + u(k) + u'~!~!~!~', u(l))
 	return content
-def templateRestore(content, templatelist=[]):
-	templatecount = len(templatelist)
-	i = 0
-	templatelist.reverse()
-	for t in templatelist:
-		i += 1
+def templateRestore(content, templates={}, keys=[]):
+	for k in reversed(keys):
+		t = templates[k]
 		if t is None:
-			content = blankAround(content, u'~!~!~!~OMGTEMPLATE-' + u(templatecount - i) + u'~!~!~!~', u'')
+			content = blankAround(content, u'~!~!~!~OMGTEMPLATE-' + u(k) + u'~!~!~!~', u'')
 		else:
-			content = content.replace(u'~!~!~!~OMGTEMPLATE-' + u(templatecount - i) + u'~!~!~!~', u(t))
+			content = content.replace(u'~!~!~!~OMGTEMPLATE-' + u(k) + u'~!~!~!~', u(t))
 	return content
 def safeContent(content):
 	safelist = []
 	tags = compileRegex(r'<(?:ref|gallery|pre|code)[^<>]*>[\S\s]*?</(?:ref|gallery|pre|code)>', re.IGNORECASE | re.MULTILINE)
 	comments = compileRegex(r'<!--[\S\s]*?-->')
-	tagcount = 0
 	res = tags.search(content)
 	if not res:
 		res = comments.search(content)
 	while res:
-		safelist.append(('~!~!~!~OMGTAG-' + u(tagcount) + u'~!~!~!~', u(res.group())))
-		content = content[:res.start()] + u'~!~!~!~OMGTAG-' + u(tagcount) + u'~!~!~!~' + content[res.end():]
-		tagcount += 1
+		key = getNewKey()
+		safelist.append(('~!~!~!~OMGTAG-' + u(key) + u'~!~!~!~', u(res.group())))
+		content = content[:res.start()] + u'~!~!~!~OMGTAG-' + u(key) + u'~!~!~!~' + content[res.end():]
 		res = tags.search(content)
 		if not res:
 			res = comments.search(content)
 	return content, safelist
 def safeContentRestore(content, safelist=[]):
-	safelist.reverse()
-	for s in safelist:
+	for s in reversed(safelist):
 		content = content.replace(s[0], s[1])
 	return content
 def regReplaceCallBack(sub, match):
@@ -729,7 +730,6 @@ def sFilter(filters, content, returnActive=False, **kwargs):
 		if type(f) is type(()):
 			f, params = f
 		filtercount += 1
-		#print 'Filter', f, '(', filtercount, '/', lenfilters, ')'
 		loopTimes = 0
 		beforeFilter = u''
 		while not loopTimes or beforeFilter != content:
@@ -744,38 +744,38 @@ def sFilter(filters, content, returnActive=False, **kwargs):
 	if returnActive:
 		return content, activeFilters
 	return content
-def linkFilter(filters, linklist, returnActive=False, **kwargs):
+def linkFilter(filters, links, linkkeys, returnActive=False, **kwargs):
 	activeFilters = []
 	for f in filters:
 		if not filterEnabled(f, **kwargs):
 			continue
 		if type(f) is type(()):
 			f, params = f
-		for i in range(len(linklist)):
-			if linklist[i] is not None and isinstance(linklist[i], link):
-				oldLink = u(linklist[i])
-				linklist[i] = f(linklist[i], **kwargs)
-				if oldLink != u(linklist[i]) and f not in activeFilters:
+		for i in linkkeys:
+			if links[i] is not None and isinstance(links[i], link):
+				oldLink = u(links[i])
+				links[i] = f(links[i], **kwargs)
+				if oldLink != u(links[i]) and f not in activeFilters:
 					activeFilters.append(f)
 	if returnActive:
-		return linklist, activeFilters
-	return linklist
-def templateFilter(filters, templatelist, returnActive=False, **kwargs):
+		return links, linkkeys, activeFilters
+	return links, linkkeys
+def templateFilter(filters, templatelist, templatekeys, returnActive=False, **kwargs):
 	activeFilters = []
 	for f in filters:
 		if not filterEnabled(f, **kwargs):
 			continue
 		if type(f) is type(()):
 			f, params = f
-		for i in range(len(templatelist)):
+		for i in templatekeys:
 			if templatelist[i] is not None and isinstance(templatelist[i], template):
 				oldTemplate = u(templatelist[i])
 				templatelist[i] = f(templatelist[i], **kwargs)
 				if oldTemplate != u(templatelist[i]) and f not in activeFilters:
 					activeFilters.append(f)
 	if returnActive:
-		return templatelist, activeFilters
-	return templatelist
+		return templatelist, templatekeys, activeFilters
+	return templatelist, templatekeys
 def linkTextFilter(subfilters, l, linksafe=False, **kwargs):
 	if l.getType() == u'internal' and l.getLink().find(u':') == -1 and pageFilter(l.getLink()):
 		if linksafe:
@@ -959,8 +959,13 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 	activeFilters = []
 	if len(content) > 9:
 		redirect = content[:9] == u'#REDIRECT'
+	filterKawrgs = {
+		'returnActive': True,
+		'redirect': redirect
+	}
 	if article is not None:
 		article = page(article)
+		filterKawrgs['article'] = article
 	while not loopTimes or content != oldcontent:
 		loopTimes += 1
 		if loopTimes > 2:
@@ -970,28 +975,28 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 			break
 		oldcontent = content
 		# Apply unsafe filters
-		content, activeF = sFilter(filters['regular'], content, returnActive=True, article=article, redirect=redirect)
+		content, activeF = sFilter(filters['regular'], content, **filterKawrgs)
 		activeFilters.extend(activeF)
 		# Apply safe filters
 		content, safelist = safeContent(content)
-		content, templatelist = templateExtract(content)
-		content, linklist = linkExtract(content)
-		content, activeF = sFilter(filters['safe'], content, returnActive=True, article=article, redirect=redirect)
+		content, templatelist, templatekeys = templateExtract(content)
+		content, linklist, linkkeys = linkExtract(content)
+		content, activeF = sFilter(filters['safe'], content, **filterKawrgs)
 		activeFilters.extend(activeF)
 		extraLinks = setFilterName(curry(linkTextFilter, filters['safe']), u'(Content filters applied to links)')
 		addLinkFilter(extraLinks)
 		if not redirect:
-			linklist, activeF = linkFilter(filters['link'], linklist, returnActive=True, article=article, redirect=redirect)
+			linklist, linkkeys, activeF = linkFilter(filters['link'], linklist, linkkeys, **filterKawrgs)
 			activeFilters.extend(activeF)
-		content = linkRestore(content, linklist)
-		templatelist, activeF = templateFilter(filters['template'], templatelist, returnActive=True, article=article, redirect=redirect)
+		content = linkRestore(content, linklist, linkkeys)
+		templatelist, templatekeys, activeF = templateFilter(filters['template'], templatelist, templatekeys, **filterKawrgs)
 		activeFilters.extend(activeF)
-		content = templateRestore(content, templatelist)
+		content = templateRestore(content, templatelist, templatekeys)
 		content = safeContentRestore(content, safelist)
 		delLinkFilter(extraLinks)
 	if article is not None and u(article.title)[:5] == 'File:':
 		# Apply file filters
-		content, activeF = sFilter(filters['file'], content, returnActive=True, article=article, redirect=redirect)
+		content, activeF = sFilter(filters['file'], content, **filterKawrgs)
 		activeFilters.extend(activeF)
 	if returnActive:
 		return content, activeFilters
