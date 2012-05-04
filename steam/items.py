@@ -16,7 +16,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 """
 
-import json, os, urllib2, time, base, operator
+import json, os, urllib2, time, base, operator, re
 
 try:
     from collections import OrderedDict
@@ -49,7 +49,59 @@ class AssetError(Error):
         self.msg = msg
         self.asset = asset
 
-class schema(object):
+class HttpStale(Error):
+    """ Raised for HTTP code 304 """
+    def __init__(self, msg):
+        Error.__init__(self, msg)
+        self.msg = msg
+
+class HttpError(Error):
+    """ Raised for other HTTP codes or results """
+    def __init__(self, msg):
+        Error.__init__(self, msg)
+        self.msg = msg
+
+class base_json_request(object):
+    """ Base class for API requests over HTTP returning JSON """
+
+    def _get_download_url(self):
+        """ Returns the URL used for downloading the JSON data """
+        return self._url
+
+    def _download(self):
+        """ Standard download, does no additional checks """
+        res = urllib2.urlopen(self._get_download_url())
+        self._last_modified = res.headers.get("last-modified")
+        return res.read()
+
+    def _download_cached(self):
+        """ Uses self.last_modified """
+        req = urllib2.Request(self._get_download_url(), headers = {"If-Modified-Since": self.get_last_modified()})
+
+        try:
+            res = urllib2.urlopen(req)
+        except urllib2.HTTPError as e:
+            ecode = e.getcode()
+            if ecode == 304:
+                # No change
+                raise HttpStale(str(self.get_last_modified()))
+            else:
+                raise HttpError("HTTP error " + str(ecode))
+
+        return res.read()
+
+    def _deserialize(self, obj):
+        return json.loads(obj)
+
+    def get_last_modified(self):
+        """ Returns the last-modified header value """
+        return self._last_modified
+
+    def __init__(self, url, last_modified = None):
+        self._last_modified = last_modified
+        self._url = url
+
+class schema(base_json_request):
     """ The base class for the item schema. """
 
     def create_item(self, oitem):
@@ -107,18 +159,10 @@ class schema(object):
         the value is a user friendly string. """
         return self._class_map
 
-    def _get_download_url(self):
-        """ Returns the URL to use for
-        fetching the raw schema """
+    def get_origin_name(self, origin):
+        """ Returns a localized origin name for a given ID """
 
-        return self._url
-
-    def _download(self):
-        return urllib2.urlopen(self._get_download_url()).read()
-
-    def _deserialize(self, schema):
-        # Convert the schema to a dict
-        return json.loads(schema)
+        return self._origins[int(origin)]["name"]
 
     def __iter__(self):
         return self.nextitem()
@@ -140,53 +184,63 @@ class schema(object):
 
         return self.create_item(self._items[realkey])
 
-    def __init__(self, lang = None):
+    def __init__(self, appid, lang = None, lm = None):
         """ schema will be used to initialize the schema if given,
-        lang can be any ISO language code. """
+        lang can be any ISO language code.
+        lm will be used to generate an HTTP If-Modified-Since header. """
 
-        schema = None
-        if not lang: lang = "en"
+        self._language = lang or "en"
+        self._class_map = MapDict()
+        self._app_id = str(appid)
 
-        self._language = lang
-        self._url = ("http://api.steampowered.com/IEconItems_" + self._app_id +
-                     "/GetSchema/v0001/?key=" + base.get_api_key() + "&format=json&language=" + lang)
+        super(schema, self).__init__("http://api.steampowered.com/IEconItems_" + self._app_id +
+                                     "/GetSchema/v0001/?key=" + base.get_api_key() + "&format=json&language=" + self._language,
+                                     last_modified = lm)
 
-        schema = self._deserialize(self._download())
+        downloadfunc = None
+        if lm: downloadfunc = self._download_cached
+        else: downloadfunc = self._download
 
-        if not schema or schema["result"]["status"] != 1:
-            raise SchemaError("Schema error", schema["result"]["status"])
+        res = self._deserialize(downloadfunc())
+
+        if not res or res["result"]["status"] != 1:
+            raise SchemaError("Schema error", res["result"]["status"])
 
         self._attributes = {}
         self._attribute_names = {}
-        for attrib in schema["result"]["attributes"]:
+        for attrib in res["result"]["attributes"]:
             # WORKAROUND: Valve apparently does case insensitive lookups on these, so we must match it
             self._attributes[attrib["defindex"]] = attrib
             self._attribute_names[attrib["name"].lower()] = attrib["defindex"]
 
         self._items = {}
-        for item in schema["result"]["items"]:
+        for item in res["result"]["items"]:
             self._items[item["defindex"]] = item
 
         self._qualities = {}
-        for k,v in schema["result"]["qualities"].iteritems():
+        for k,v in res["result"]["qualities"].iteritems():
             aquality = {"id": v, "str": k, "prettystr": k}
 
-            try: aquality["prettystr"] = schema["result"]["qualityNames"][aquality["str"]]
+            try: aquality["prettystr"] = res["result"]["qualityNames"][aquality["str"]]
             except KeyError: pass
 
             self._qualities[v] = aquality
 
         self._particles = {}
-        for particle in schema["result"].get("attribute_controlled_attached_particles", []):
+        for particle in res["result"].get("attribute_controlled_attached_particles", []):
             self._particles[particle["id"]] = particle
 
         self._item_ranks = {}
-        for rankset in schema["result"].get("item_levels", []):
+        for rankset in res["result"].get("item_levels", []):
             self._item_ranks[rankset["name"]] = rankset["levels"]
 
         self._kill_types = {}
-        for killtype in schema["result"].get("kill_eater_score_types", []):
-            self._kill_types[killtype["type"]] = killtype["type_name"]
+        for killtype in res["result"].get("kill_eater_score_types", []):
+            self._kill_types[killtype["type"]] = killtype
+
+        self._origins = {}
+        for origin in res["result"].get("originNames", []):
+            self._origins[origin["origin"]] = origin
 
 class item:
     """ Stores a single TF2 backpack item """
@@ -269,7 +323,7 @@ class item:
         if not equipped: return []
 
         # Yes I'm stubborn enough to use this for a WORKAROUND
-        classes = set([classes.get(slot["class"]) for slot in
+        classes = set([classes.get(slot["class"], slot["class"]) for slot in
                        equipped if slot["class"] !=0 and slot["slot"] != 65535])
 
         return list(classes)
@@ -435,41 +489,72 @@ class item:
 
         return ((prefix or "") + " " + item_name + " " + suffix).strip()
 
+    def get_kill_eaters(self):
+        """
+        Returns a list of tuples containing the proper localized kill eater type strings and their values
+        according to set/type/value "order"
+        """
+
+        # Order matters in how they show up in the tuple
+        eaterspecs = {"type": "^kill eater user score type ?(?P<b>\d*)$|^kill eater score type ?(?P<a>\d*)$",
+                      "count": "^kill eater user ?(?P<b>\d*)$|^kill eater ?(?P<a>\d*)$"}
+        eaters = {}
+        finalres = []
+        ranktypes = self._schema.get_kill_types()
+
+        if not ranktypes:
+            return []
+
+        for attr in self:
+            for name, spec in eaterspecs.iteritems():
+                regexpmatch = re.match(spec, attr.get_name())
+                if regexpmatch:
+                    matchid = None
+                    value = int(attr.get_value())
+                    matchgroup = regexpmatch.groupdict()
+
+                    # Ensure no conflicts between ranking this and non-attached attributes
+                    for k, v in matchgroup.iteritems():
+                        if v != None:
+                            idsuffix = v or '0'
+                            matchid = k + idsuffix
+
+                    if matchid not in eaters:
+                        eaters[matchid] = {}
+
+                    eaters[matchid][name] = value
+                    eaters[matchid]["aid"] = attr.get_id()
+
+        for k in sorted(eaters.keys()):
+            eater = eaters[k]
+            rank = ranktypes[eater.get("type", 0)]
+            finalres.append((rank["level_data"], rank["type_name"], eater.get("count"), eater["aid"]))
+
+        return finalres
+
     def get_rank(self):
         """
         Returns the item's rank (if it has one)
         as a dict that includes required score, name, and level.
         """
 
-        kills = []
-
         if self._rank != {}:
             # Don't bother doing attribute lookups again
             return self._rank
 
-        try: kills.append(int(self["kill eater"].get_value()))
-        except KeyError: pass
+        eaterlines = self.get_kill_eaters()
 
-        try: kills.append(int(self["kill eater 2"].get_value()))
-        except KeyError: pass
-
-        if not kills:
+        if not eaterlines or eaterlines[0][2] == None:
             self._rank = None
             return None
+        else: eaterlines = eaterlines[0]
 
-        kills.sort(reverse = True)
-        
-        #WORKAROUND until it is possible to get the rank set name automatically
         ranksets = self._schema.get_kill_ranks()
-        rankset = []
-        if self.get_schema_id() == 655:
-            rankset = ranksets["SpiritOfGivingRank"]
-        else:
-            rankset = ranksets["KillEaterRank"]
-
+        rankset = ranksets[eaterlines[0]]
+        realranknum = eaterlines[2]
         for rank in rankset:
             self._rank = rank
-            if kills[0] < rank["required_score"]:
+            if realranknum < rank["required_score"]:
                 break
 
         return self._rank
@@ -504,6 +589,17 @@ class item:
     def get_tool_metadata(self):
         """ Assume this will change. For now returns a dict of various information about tool items """
         return self._schema_item.get("tool")
+
+    def get_origin_name(self):
+        """ Returns the item's localized origin name """
+
+        if "origin" in self._item:
+            return self._schema.get_origin_name(self._item["origin"])
+
+    def get_origin_id(self):
+        """ Returns the item's origin ID """
+
+        return self._item.get("origin")
 
     def __iter__(self):
         return self.nextattr()
@@ -702,33 +798,8 @@ class item_attribute:
         except TypeError:
             pass
 
-class backpack:
+class backpack(base_json_request):
     """ Functions for reading player inventory """
-
-    def load(self, sid):
-        """ Loads or refreshes the player backpack for the given steam.user
-        Returns a list of items, will be empty if there's nothing in the backpack"""
-        if not isinstance(sid, base.user.profile):
-            sid = base.user.profile(sid)
-        id64 = sid.get_id64()
-        url = ("http://api.steampowered.com/IEconItems_" + self._app_id + "/GetPlayerItems/"
-               "v0001/?key=" + base.get_api_key() + "&format=json&SteamID=")
-        inv = urllib2.urlopen(url + str(id64)).read()
-
-        # Once again I'm doing what Valve should be doing before they generate
-        # JSON. WORKAROUND
-        self._inventory_object = json.loads(inv.replace("-1.#QNAN0", "0"))
-        result = self._inventory_object["result"]["status"]
-        if result == 8:
-            raise Error("Bad SteamID64 given")
-        elif result == 15:
-            raise Error("Profile set to private")
-        elif result != 1:
-            raise Error("Unknown error")
-
-        itemlist = self._inventory_object["result"]["items"]
-        if len(itemlist) and itemlist[0] == None:
-            self._inventory_object["result"]["items"] = []
 
     def get_total_cells(self):
         """ Returns the total number of cells in the backpack.
@@ -752,86 +823,131 @@ class backpack:
             iterindex += 1
             yield data
 
-    def __init__(self, sid = None, oschema = None):
+    def __init__(self, appid, sid, oschema = None):
         """ Loads the backpack of user sid if given,
         generates a fresh schema object if one is not given. """
 
         self._schema = oschema
+        self._app_id = str(appid)
+        self._profile = sid
+
+        if not isinstance(self._profile, base.user.profile):
+            self._profile = base.user.profile(self._profile)
+
+        url = ("http://api.steampowered.com/IEconItems_{0}/GetPlayerItems/v0001/?key={1}&format=json&SteamID={2}").format(
+            self._app_id,
+            base.get_api_key(),
+            self._profile.get_id64())
+
+        super(backpack, self).__init__(url)
+
         if not self._schema:
             self._schema = schema()
-        if sid:
-            self.load(sid)
 
-class assets(object):
-    """ Class for building asset catalogs """
+        # Once again I'm doing what Valve should be doing before they generate
+        # JSON. WORKAROUND
+        self._inventory_object = self._deserialize(self._download().replace("-1.#QNAN0", "0"))
+        result = self._inventory_object["result"]["status"]
+        if result == 8:
+            raise Error("Bad SteamID64 given")
+        elif result == 15:
+            raise Error("Profile set to private")
+        elif result != 1:
+            raise Error("Unknown error")
 
-    def get_price(self, assetindex, nonsale = False):
+        itemlist = self._inventory_object["result"]["items"]
+        if len(itemlist) and itemlist[0] == None:
+            self._inventory_object["result"]["items"] = []
+
+class asset_item:
+    def __init__(self, asset, catalog):
+        self._catalog = catalog
+        self._asset = asset
+
+    def __unicode__(self):
+        return self.get_name() + " " + str(self.get_price())
+
+    def __str__(self):
+        return unicode(self).encode("utf-8")
+
+    def get_tags(self):
+        """ Returns a dict containing tags and their localized labels as values """
+        tags = {}
+        for k in self._asset.get("tags"):
+            tags[k] = self._catalog._tag_map.get(k, k)
+        return tags
+
+
+    def get_price(self, nonsale = False):
         """ Returns a dict containing prices for all available
         currencies or a single price otherwise. If nonsale is
         True normal prices will always be returned, even if there
         is currently a discount """
 
-        try:
-            asset = self._assets[assetindex]
-            price = None
-            currency = self._currency
-            pricedict = asset["prices"]
+        asset = self._asset
+        price = None
+        currency = self._catalog._currency
+        pricedict = asset["prices"]
 
-            if nonsale: pricedict = asset.get("original_prices", asset["prices"])
+        if nonsale: pricedict = asset.get("original_prices", asset["prices"])
 
-            if currency:
-                try:
-                    price = float(pricedict[currency.upper()])/100
-                    return price
-                except KeyError:
-                    return None
-            else:
-                decprices = {}
-                for k, v in pricedict.iteritems():
-                    decprices[k] = float(v)/100
-                return decprices
-        except KeyError:
-            raise AssetError("Couldn't find asset " + str(assetindex))
+        if currency:
+            try:
+                price = float(pricedict[currency.upper()])/100
+                return price
+            except KeyError:
+                return None
+        else:
+            decprices = {}
+            for k, v in pricedict.iteritems():
+                decprices[k] = float(v)/100
+            return decprices
 
-    def get_tags(self, assetindex):
-        """ Returns a dict containing tags and their localized labels as values """
-        tags = {}
-        try:
-            asset = self._assets[assetindex]
-            for k in asset.get("tags").keys():
-                tags[k] = self._tag_map.get(k, k)
-        except KeyError:
-            raise AssetError("Couldn't find asset " + assetindex)
-        return tags
+    def get_name(self):
+        return self._asset.get("name")
 
-    def _get_download_url(self):
-        return self._url
-
-    def _download(self):
-        return urllib2.urlopen(self._get_download_url()).read()
-
-    def _deserialize(self, assets):
-        return json.loads(assets)
+class assets(base_json_request):
+    """ Class for building asset catalogs """
 
     def __getitem__(self, key):
         try:
-            return self.get_price(key.get_schema_id())
+            return self._assets[str(key.get_schema_id())]
         except:
-            try: return self.get_price(key)
-            except: raise KeyError(key)
+            return self._assets[str(key)]
 
-    def __init__(self, lang = None, currency = None):
+    def __iter__(self):
+        return self._nextitem()
+
+    def _nextitem(self):
+        data = sorted(self._assets.values(), key = asset_item.get_name)
+        iterindex = 0
+
+        while iterindex < len(data):
+            ydata = data[iterindex]
+            iterindex += 1
+            yield ydata
+
+    def __init__(self, appid, lang = None, currency = None, lm = None):
         """ lang: Language of asset tags, defaults to english
         currency: The iso 4217 currency code, returns all currencies by default """
 
-        if not lang: lang = "en"
-        self._language = lang
+        self._language = lang or "en"
         self._currency = currency
-        self._url = ("http://api.steampowered.com/ISteamEconomy/GetAssetPrices/v0001?" +
-                     "key={0}&format=json&language={1}&appid={2}".format(base.get_api_key(),
-                                                                         self._language,
-                                                                         self._app_id))
-        if self._currency: self._url += "&currency=" + self._currency
+        self._app_id = appid
+
+        url = ("http://api.steampowered.com/ISteamEconomy/GetAssetPrices/v0001?" +
+               "key={0}&format=json&language={1}&appid={2}".format(base.get_api_key(),
+                                                                   self._language,
+                                                                   self._app_id))
+        if self._currency: url += "&currency=" + self._currency
+
+        super(assets, self).__init__(url, lm)
+
+        downloadfunc = None
+        if lm: downloadfunc = self._download_cached
+        else: downloadfunc = self._download
+
+        res = self._deserialize(downloadfunc())
 
         try:
             adict = self._deserialize(self._download())["result"]
@@ -841,9 +957,6 @@ class assets(object):
             self._tag_map = adict["tags"]
             self._assets = {}
             for asset in adict["assets"]:
-                for prop in asset["class"]:
-                    if prop.get("name") == "def_index":
-                        self._assets[int(prop.get("value"))] = asset
-                        break
+                self._assets[asset["name"]] = asset_item(asset, self)
         except KeyError as E:
             raise AssetError("Bad asset list")
