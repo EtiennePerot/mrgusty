@@ -11,6 +11,8 @@ config = {
 	'pagePasses': 8, # Maximum number of parsing/filtering passes
 	'filterPasses': 64, # Maximum number of times to run a fitler on a filtering pass
 	'tempPrefix': 'MrGusty', # Prefix for temporary filenames
+	'maxConcurrency': 8, # Max number of requests going on concurrently
+	'editWaitTime': (0.1, 0.5), # Before every edit, wait a random number of seconds between the two provided numbers. Set to None or remove the line to ignore.
 	'pages': {
 		'filters': 'User:MrGusty/Filters', # Filters page
 		'blacklist': 'User:MrGusty/Blacklist', # Blacklist

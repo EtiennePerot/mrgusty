@@ -93,7 +93,10 @@ class curry:
 		return self.func(*(self.pending + args), **kw)
 class BatchScheduler:
 	def __init__(self, concurrency=16):
-		self.concurrency = 16
+		global config
+		self.concurrency = concurrency
+		if 'maxConcurrency' in config:
+			self.concurrency = min(config['maxConcurrency'], self.concurrency)
 		self.tasks = []
 	def schedule(self, target, *args, **kwargs):
 		self.tasks.append((target, args, kwargs))
@@ -153,6 +156,8 @@ def getSummary(summary):
 	return summary
 def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 	global config
+	if 'editWaitTime' in config and type(config['editWaitTime']) is type(()) and len(config['editWaitTime']) == 2:
+		time.sleep(random.uniform(*config['editWaitTime']))
 	summary = getSummary(summary)
 	p = page(p)
 	try:
