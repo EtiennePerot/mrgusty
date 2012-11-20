@@ -357,7 +357,7 @@ class link:
 				return u'[[' + label + u']]'
 			elif tmpLink and label and len(label) > len(tmpLink) and (label.lower().find(tmpLink2.lower()) == 0 or label.lower().find(tmpLink.lower()) == 0):
 				index = max(label.lower().find(tmpLink2.lower()), label.lower().find(tmpLink.lower()))
-				badchars = (u' ', u'_')
+				badchars = (u' ', u'_', u'.')
 				nobadchars = True
 				for c in badchars:
 					if label[:index].find(c) != -1 or label[index+len(tmpLink):].find(c) != -1:
