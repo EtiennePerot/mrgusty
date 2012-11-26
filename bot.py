@@ -734,7 +734,7 @@ def sFilter(filters, content, returnActive=False, **kwargs):
 			continue
 		if type(f) is type(()):
 			f, params = f
-			f.lowPriority = params['lowPriority'] if 'lowPriority' in params else False
+			if 'lowPriority' in params and params['lowPriority']: f.lowPriority = True
 		filtercount += 1
 		loopTimes = 0
 		beforeFilter = u''
@@ -757,7 +757,7 @@ def linkFilter(filters, links, linkkeys, returnActive=False, **kwargs):
 			continue
 		if type(f) is type(()):
 			f, params = f
-			f.lowPriority = params['lowPriority'] if 'lowPriority' in params else False
+			if 'lowPriority' in params and params['lowPriority']: f.lowPriority = True
 		for i in linkkeys:
 			if links[i] is not None and isinstance(links[i], link):
 				oldLink = u(links[i])
@@ -774,7 +774,7 @@ def templateFilter(filters, templatelist, templatekeys, returnActive=False, **kw
 			continue
 		if type(f) is type(()):
 			f, params = f
-			f.lowPriority = params['lowPriority'] if 'lowPriority' in params else False
+			if 'lowPriority' in params and params['lowPriority']: f.lowPriority = True
 		for i in templatekeys:
 			if templatelist[i] is not None and isinstance(templatelist[i], template):
 				oldTemplate = u(templatelist[i])
@@ -1030,7 +1030,7 @@ def fixPage(article, **kwargs):
 	if content != originalContent:
 		# Check if all edits are low priority
 		for f in activeFilters:
-			if not f.lowPriority:
+			if not hasattr(f, 'lowPriority') or (hasattr(f, 'lowPriority') and not f.lowPriority):
 				priorityEdits = True
 				break
 		if priorityEdits:
