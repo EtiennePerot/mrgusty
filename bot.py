@@ -258,6 +258,10 @@ def setFilterName(f, name):
 	f.__str__ = lambda: name.encode('utf8')
 	f.filterName = name
 	return f
+
+def setFilterLowPriority(f, priority=True):
+	f.lowPriority = priority
+	return f
 class link:
 	def __init__(self, content):
 		content = u(content)
@@ -734,6 +738,7 @@ def sFilter(filters, content, returnActive=False, **kwargs):
 			continue
 		if type(f) is type(()):
 			f, params = f
+			if 'lowPriority' in params and params['lowPriority']: setFilterLowPriority(f)
 		filtercount += 1
 		loopTimes = 0
 		beforeFilter = u''
@@ -756,6 +761,7 @@ def linkFilter(filters, links, linkkeys, returnActive=False, **kwargs):
 			continue
 		if type(f) is type(()):
 			f, params = f
+			if 'lowPriority' in params and params['lowPriority']: setFilterLowPriority(f)
 		for i in linkkeys:
 			if links[i] is not None and isinstance(links[i], link):
 				oldLink = u(links[i])
@@ -772,6 +778,7 @@ def templateFilter(filters, templatelist, templatekeys, returnActive=False, **kw
 			continue
 		if type(f) is type(()):
 			f, params = f
+			if 'lowPriority' in params and params['lowPriority']: setFilterLowPriority(f)
 		for i in templatekeys:
 			if templatelist[i] is not None and isinstance(templatelist[i], template):
 				oldTemplate = u(templatelist[i])
@@ -1009,6 +1016,7 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 def fixPage(article, **kwargs):
 	article = page(article)
 	force = False
+	priorityEdits = False
 	if 'force' in kwargs and kwargs['force']:
 		force = True
 	try:
@@ -1024,17 +1032,26 @@ def fixPage(article, **kwargs):
 	originalContent = u(article.getWikiText())
 	content, activeFilters = fixContent(originalContent, returnActive=True, article=article)
 	if content != originalContent:
-		print article, 'needs to be updated.'
-		summary = u'Auto: ' + filterRepr(activeFilters)
-		if 'reason' in kwargs:
-			summary += u' (' + u(kwargs['reason']) + u')'
-		if 'fake' in kwargs:
-			print '-------- New content is: --------'
-			print content
-			print '---------------------------------'
+		# Check if all edits are low priority
+		for f in activeFilters:
+			if not hasattr(f, 'lowPriority') or not f.lowPriority:
+				priorityEdits = True
+				break
+		if priorityEdits:
+			print article, 'needs to be updated.'
+			summary = u'Auto: ' + filterRepr(activeFilters)
+			if 'reason' in kwargs:
+				summary += u' (' + u(kwargs['reason']) + u')'
+			if 'fake' in kwargs:
+				print '-------- New content is: --------'
+				print content
+				print '---------------------------------'
+			else:
+				editPage(article, content, summary=summary)
+			return True
 		else:
-			editPage(article, content, summary=summary)
-		return True
+			print article, 'only requires low priority edits. Skipping'
+			return False
 	print article, 'is up-to-date.'
 	return False
 def patrol(change):
