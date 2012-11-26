@@ -1030,7 +1030,7 @@ def fixPage(article, **kwargs):
 	if content != originalContent:
 		# Check if all edits are low priority
 		for f in activeFilters:
-			if not hasattr(f, 'lowPriority') or (hasattr(f, 'lowPriority') and not f.lowPriority):
+			if not hasattr(f, 'lowPriority') or not f.lowPriority:
 				priorityEdits = True
 				break
 		if priorityEdits:
