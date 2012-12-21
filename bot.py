@@ -139,7 +139,11 @@ def page(p):
 	if type(p) in (type(''), type(u'')):
 		p = u(p)
 		if p not in config['runtime']['pages']:
-			config['runtime']['pages'][p] = wikitools.page.Page(wiki(), p, followRedir=False)
+			try:
+				config['runtime']['pages'][p] = wikitools.page.Page(wiki(), p, followRedir=False)
+			except wikitools.page.BadTitle:
+				# Try URL-decoding the title
+				config['runtime']['pages'][p] = wikitools.page.Page(wiki(), urllib2.unquote(p), followRedir=False)
 		return config['runtime']['pages'][p]
 	# Else, it is a page object
 	title = u(p.title)
