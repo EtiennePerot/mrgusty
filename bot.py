@@ -27,6 +27,7 @@ import subprocess
 import cStringIO as StringIO
 import shutil
 import itertools
+from Queue import Queue
 import wikitools
 import wikiUpload
 try:
@@ -73,6 +74,14 @@ def u(s):
 			return u(str(s))
 		except:
 			return s
+_printLock = threading.RLock()
+def tprint(*args):
+	s = u' '.join(map(u, args))
+	with _printLock:
+		try:
+			print(s.encode('utf-8'))
+		except:
+			pass
 class curry:
 	def __init__(self, func, *args, **kwargs):
 		self.func = func
@@ -91,27 +100,6 @@ class curry:
 		else:
 			kw = kwargs or self.kwargs
 		return self.func(*(self.pending + args), **kw)
-class BatchScheduler:
-	def __init__(self, concurrency=16):
-		global config
-		self.concurrency = concurrency
-		if 'maxConcurrency' in config:
-			self.concurrency = min(config['maxConcurrency'], self.concurrency)
-		self.tasks = []
-	def schedule(self, target, *args, **kwargs):
-		self.tasks.append((target, args, kwargs))
-	def execute(self):
-		while len(self.tasks):
-			pool = []
-			numThreads = min(self.concurrency, len(self.tasks))
-			for task in range(numThreads):
-				task = self.tasks[task]
-				t = threading.Thread(target=task[0], args=task[1], kwargs=task[2])
-				t.start()
-				pool.append(t)
-			for t in pool:
-				t.join()
-			self.tasks = self.tasks[numThreads:]
 def getTempFilename(extension=None):
 	global config
 	if extension is None:
@@ -125,14 +113,14 @@ def wiki():
 	global config
 	if config['runtime']['wiki'] is None:
 		config['runtime']['wiki'] = wikitools.wiki.Wiki(config['api'])
-		print 'Logging in as', config['username'], '...'
+		tprint('Logging in as', config['username'], '...')
 		config['runtime']['wiki'].login(config['username'], config['password'])
 		try:
 			config['runtime']['onlinercid'] = int(u(wikitools.page.Page(wiki(), config['pages']['rcid']).getWikiText()).strip())
 			config['runtime']['rcid'] = config['runtime']['onlinercid']
 		except:
 			error('Couldn\'t read RCID.')
-		print 'Logged in.'
+		tprint('Logged in.')
 	return config['runtime']['wiki']
 def page(p):
 	global config
@@ -158,14 +146,21 @@ def getSummary(summary):
 		else:
 			summary = summary[:247] + u'...'
 	return summary
+_editLock = threading.RLock()
 def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 	global config
-	if 'editWaitTime' in config and type(config['editWaitTime']) is type(()) and len(config['editWaitTime']) == 2:
-		time.sleep(random.uniform(*config['editWaitTime']))
+	with _editLock:
+		now = time.time()
+		if 'editWaitTime' in config and type(config['editWaitTime']) is type(()) and len(config['editWaitTime']) == 2:
+			if 'lastEdit' not in config['runtime']:
+				config['runtime']['lastEdit'] = now
+			waitTime = random.uniform(*config['editWaitTime'])
+			if config['runtime']['lastEdit'] + waitTime > now:
+				time.sleep(config['runtime']['lastEdit'] + waitTime - now)
 	summary = getSummary(summary)
 	p = page(p)
 	try:
-		print 'Editing', p.title, 'with summary', summary
+		tprint('Editing', p.title, 'with summary', summary)
 	except:
 		pass
 	try:
@@ -187,6 +182,7 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 			config['runtime']['edits'] += 1
 	except:
 		warning('Couldn\'t edit', p.title)
+	config['runtime']['lastEdit'] = now
 	return result
 def deletePage(p, summary=False):
 	if summary:
@@ -197,7 +193,7 @@ def uploadFile(filename, destfile, pagecontent='', license='', overwrite=False, 
 	return config['runtime']['uploader'].upload(filename, destfile, pagecontent, license, overwrite=overwrite, reupload=reupload)
 def updateRCID():
 	if abs(config['runtime']['rcid'] - config['runtime']['onlinercid']) >= config['rcidrate']:
-		print 'Updating last RCID...'
+		tprint('Updating last RCID...')
 		try:
 			editPage(config['pages']['rcid'], config['runtime']['rcid'], summary=u'Updated Recent Changes log position to ' + u(config['runtime']['rcid']))
 			config['runtime']['onlinercid'] = config['runtime']['rcid']
@@ -249,7 +245,7 @@ def compileRegex(regex, flags=re.IGNORECASE):
 
 def warning(*info):
 	s = []
-	print info
+	tprint(info)
 	import traceback
 	traceback.print_exc()
 def error(*info):
@@ -712,22 +708,22 @@ scheduledTasks = []
 def scheduleTask(task, oneinevery):
 	global scheduledTasks
 	result = random.randint(0, oneinevery-1)
-	print 'Task:', task, '; result:', result
+	tprint('Task:', task, '; result:', result)
 	if not result:
 		scheduledTasks.append(task)
 def runScheduledTasks():
 	global scheduledTasks
 	if not len(scheduledTasks):
-		print 'No tasks scheduled.'
+		tprint('No tasks scheduled.')
 		return
-	print 'Running scheduled tasks...'
+	tprint('Running scheduled tasks...')
 	for t in scheduledTasks:
-		print 'Running task:', t
+		tprint('Running task:', t)
 		try:
 			t()
-			print 'End of task:', t
+			tprint('End of task:', t)
 		except:
-			print 'Error while executing task:', t
+			tprint('Error while executing task:', t)
 def sFilter(filters, content, returnActive=False, **kwargs):
 	content = u(content)
 	lenfilters = len(filters)
@@ -750,7 +746,7 @@ def sFilter(filters, content, returnActive=False, **kwargs):
 		while not loopTimes or beforeFilter != content:
 			loopTimes += 1
 			if loopTimes >= config['filterPasses']:
-				print 'Warning: More than', config['filterPasses'], 'loops with filter', u(f)
+				tprint('Warning: More than', config['filterPasses'], 'loops with filter', u(f))
 				break
 			beforeFilter = content
 			content = u(f(content, **kwargs))
@@ -988,9 +984,9 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 	while not loopTimes or content != oldcontent:
 		loopTimes += 1
 		if loopTimes > 2:
-			print 'Pass', loopTimes, 'on', article
+			tprint('Pass', loopTimes, 'on', article)
 		if loopTimes >= config['pagePasses']:
-			print 'Warning: More than', config['pagePasses'], 'fix passes on article', u(article.title)
+			tprint('Warning: More than', config['pagePasses'], 'fix passes on article', u(article.title))
 			break
 		oldcontent = content
 		# Apply unsafe filters
@@ -1020,60 +1016,171 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 	if returnActive:
 		return content, activeFilters
 	return content
-def fixPage(article, **kwargs):
-	article = page(article)
-	force = False
-	priorityEdits = False
-	if 'force' in kwargs and kwargs['force']:
-		force = True
-	try:
-		catFilter = categoryFilter(article)
-	except wikitools.page.NoPage:
-		print 'No such page:', article
-		return False
-	except:
-		catFilter = True
-	if not force and (not pageFilter(article) or not catFilter):
-		print 'Skipping:', article
-		return
-	originalContent = u(article.getWikiText())
-	content, activeFilters = fixContent(originalContent, returnActive=True, article=article)
-	if content != originalContent:
-		# Check if all edits are low priority
-		for f in activeFilters:
-			if not hasattr(f, 'lowPriority') or not f.lowPriority:
-				priorityEdits = True
-				break
-		if priorityEdits:
-			print article, 'needs to be updated.'
-			summary = u'Auto: ' + filterRepr(activeFilters)
-			if 'reason' in kwargs:
-				summary += u' (' + u(kwargs['reason']) + u')'
-			if 'fake' in kwargs:
-				print '-------- New content is: --------'
-				print content
-				print '---------------------------------'
-			else:
-				editPage(article, content, summary=summary)
-			return True
-		else:
-			print article, 'only requires low priority edits. Skipping'
+class BatchScheduler:
+	class BatchSchedulerThread(threading.Thread):
+		def __init__(self, scheduler):
+			threading.Thread.__init__(self)
+			self.scheduler = scheduler
+			self.killed = False
+			self.task = None
+			self.busy = threading.Condition()
+			self.daemon = True
+			self.start()
+		def work(self, task):
+			with self.busy:
+				if not self.killed:
+					self.task = task
+					self.busy.notify()
+		def run(self):
+			while not self.killed:
+				with self.busy:
+					while not self.killed and self.task is None:
+						self.busy.wait()
+				if not self.killed:
+					function, args, kwargs = self.task
+					try:
+						function(*args, **kwargs)
+					except Exception, e:
+						tprint('Exception', e, 'occured in worker thread.')
+					self.task = None
+					self.scheduler.freePool.put(self)
+		def stop(self):
+			with self.busy:
+				self.killed = True
+				self.busy.notify()
+	def __init__(self, concurrency=16):
+		global config
+		self.concurrency = concurrency
+		if 'concurrency' in config and not config['concurrency']:
+			self.concurrency = 1
+		elif 'maxConcurrency' in config:
+			self.concurrency = min(config['maxConcurrency'], self.concurrency)
+		self.tasks = Queue()
+		self.freePool = Queue(self.concurrency)
+		for x in xrange(self.concurrency):
+			self.freePool.put(BatchScheduler.BatchSchedulerThread(self))
+		self.deallocated = False
+	def schedule(self, target, *args, **kwargs):
+		if not self.deallocated:
+			self.tasks.put((target, args, kwargs))
+	def execute(self, cleanup=True):
+		if self.deallocated:
+			return
+		try:
+			while not self.tasks.empty():
+				task = self.tasks.get()
+				worker = self.freePool.get()
+				worker.work(task)
+			while not self.freePool.full():
+				time.sleep(.2)
+		except KeyboardInterrupt:
+			self.deallocate()
+		if cleanup:
+			while not self.tasks.empty():
+				self.tasks.get() # Empty the queue
+			self.deallocate()
+	def deallocate(self):
+		if not self.deallocated:
+			toJoin = []
+			while not self.freePool.empty():
+				toJoin.append(self.freePool.get())
+				toJoin[-1].stop()
+			try:
+				for worker in toJoin:
+					worker.join()
+			except KeyboardInterrupt:
+				pass # Give up waiting
+			self.deallocated = True
+class PageReviewSpooler:
+	def __init__(self):
+		self.pages = Queue()
+		self.editQueue = Queue()
+		self.pageLock = threading.RLock()
+		self.seenPages = {}
+	def addPage(self, page, **kwargs):
+		pageTite = page
+		if hasattr(page, 'title'):
+			pageTite = page.title
+		with self.pageLock:
+			if pageTite not in self.seenPages:
+				self.seenPages[pageTite] = True
+				self.pages.put((page, kwargs))
+	def addEdit(self, page, content, summary):
+		self.editQueue.put((page, content, summary))
+	def processPage(self, article, kwargs):
+		article = page(article)
+		force = False
+		priorityEdits = False
+		if 'force' in kwargs and kwargs['force']:
+			force = True
+		try:
+			catFilter = categoryFilter(article)
+		except wikitools.page.NoPage:
+			tprint('No such page:', article)
 			return False
-	print article, 'is up-to-date.'
-	return False
+		except:
+			catFilter = True
+		if not force and (not pageFilter(article) or not catFilter):
+			tprint('Skipping:', article)
+			return
+		originalContent = u(article.getWikiText())
+		content, activeFilters = fixContent(originalContent, returnActive=True, article=article)
+		if content != originalContent:
+			# Check if all edits are low priority
+			for f in activeFilters:
+				if not hasattr(f, 'lowPriority') or not f.lowPriority:
+					priorityEdits = True
+					break
+			if priorityEdits:
+				tprint(article, 'needs to be updated.')
+				summary = u'Auto: ' + filterRepr(activeFilters)
+				if 'reason' in kwargs:
+					summary += u' (' + u(kwargs['reason']) + u')'
+				if 'fake' in kwargs:
+					tprint('-------- New content is: --------')
+					tprint(content)
+					tprint('---------------------------------')
+				else:
+					self.addEdit(article, content, summary)
+			else:
+				tprint(article, 'only requires low priority edits. Skipping.')
+		else:
+			tprint(article, 'is up-to-date.')
+	def run(self):
+		self.readScheduler = BatchScheduler()
+		self.writeScheduler = BatchScheduler()
+		while not self.pages.empty():
+			while not self.pages.empty():
+				page, kwargs = self.pages.get()
+				self.readScheduler.schedule(self.processPage, page, kwargs)
+			self.readScheduler.execute(cleanup=False) # May add more pages to self.pages, hence the double while loop
+		self.readScheduler.deallocate()
+		while not self.editQueue.empty():
+			page, content, summary = self.editQueue.get()
+			self.writeScheduler.schedule(editPage, page, content, summary=summary)
+		self.writeScheduler.execute()
+_pageReviewSpooler = PageReviewSpooler()
+def fixPage(article, **kwargs):
+	_pageReviewSpooler.addPage(article, **kwargs)
+def executeEdits():
+	_pageReviewSpooler.run()
 def patrol(change):
 	global config
 	secondsElapsed = (datetime.datetime.utcnow() - datetime.datetime.fromtimestamp(time.mktime(time.strptime(change['timestamp'], r'%Y-%m-%dT%H:%M:%SZ'))))
 	totalTime = secondsElapsed.seconds + secondsElapsed.days * 86400
 	if int(change['rcid']) <= config['runtime']['rcid'] or not pageFilter(change['title']) or totalTime <= config['freshnessThreshold']:
-		print 'Skipping', change['rcid'], change['title']
+		reason = '(Too fresh)'
+		if int(change['rcid']) <= config['runtime']['rcid']:
+			reason = '(Latest RCID: ' + str(config['runtime']['rcid']) + ')'
+		elif not pageFilter(change['title']):
+			reason = '(Page filtered)'
+		tprint('Skipping', change['rcid'], change['title'], reason)
 		if int(change['rcid']) > config['runtime']['rcid']:
 			config['runtime']['rcid'] = int(change['rcid'])
 		return
-	print 'Patrolling', change['title']
+	tprint('Patrolling', change['title'])
 	config['runtime']['rcid'] = int(change['rcid'])
-	result = fixPage(change['title'], reason=u'Review RC#' + u(change['rcid']))
-	updateRCID()
+	fixPage(change['title'], reason=u'Review RC#' + u(change['rcid']))
 def loadPage(p):
 	p = page(p)
 	try:
@@ -1116,7 +1223,9 @@ def patrolChanges():
 			error('Interrupted:', change)
 		except:
 			warning('Failed to patrol change:', change)
-	print 'Done patrolling.'
+	executeEdits()
+	updateRCID()
+	tprint('Done patrolling.')
 def parsePageRequest(l, links=[]):
 	l = u(l)
 	content = []
@@ -1134,7 +1243,7 @@ def parsePageRequest(l, links=[]):
 	return selfContent, links
 def doPageRequests(force=False):
 	global config
-	print 'Executing page requests. Force =', force
+	tprint('Executing page requests. Force =', force)
 	if force:
 		requestPageTitle = config['pages']['pagerequestsforce']
 	else:
@@ -1173,6 +1282,7 @@ def doPageRequests(force=False):
 	tofix.reverse()
 	for p in tofix:
 		fixPage(p, reason=u'Requested on [[:' + u(requestPageTitle) + u']]', force=force)
+	executeEdits()
 	requests = regSub({r'^[ \t]*(\*[^\r\n]+)[\r\n]+(?=^[ \t]*\*)':'$1\r\n'}, requests)
 	if len(tofix) and originalRequests != requests:
 		if tooMany:
@@ -1271,27 +1381,25 @@ def programExists(programName):
 		return False
 def run():
 	global config
-	print 'Bot started.'
+	tprint('Bot started.')
 	loadPage(config['pages']['filters'])
 	for p in sys.argv[1:]:
-		print 'Forced update to', p, '...'
-		fixPage(p)
+		tprint('Forced update to', p, '...')
+		fixPage(p, force=True)
+	executeEdits()
 	loadBlacklist()
 	patrolChanges()
 	updateRCID()
 	doPageRequests(force=True)
 	doPageRequests(force=False)
-	updateEditCount()
 	runScheduledTasks()
+	executeEdits() # In case scheduled tasks create some edits
+	updateEditCount()
 	try:
 		import rcNotify
 		rcNotify.main(once=True)
 	except:
 		pass
-	try:
-		subprocess.Popen(['killall', 'cpulimit']).communicate()
-	except:
-		pass
-	print 'All done.'
+	tprint('All done.')
 if __name__ == '__main__':
 	run()
