@@ -24,6 +24,7 @@ import traceback
 import threading
 import random
 import subprocess
+import json
 import cStringIO as StringIO
 import shutil
 import itertools
@@ -43,6 +44,8 @@ from wikiUpload import wikiUploader
 from botConfig import config
 if steam is not None and 'steamAPI' in config:
 	steam.set_api_key(config['steamAPI'])
+if 'apiTimeout' in config:
+	wikitools.api.setDefaultTimeout(config['apiTimeout'])
 config['runtime'] = {
 	'rcid': -1,
 	'onlinercid': -1,
@@ -722,8 +725,8 @@ def runScheduledTasks():
 		try:
 			t()
 			tprint('End of task:', t)
-		except:
-			tprint('Error while executing task:', t)
+		except Exception as e:
+			tprint('Error while executing task:', t, e)
 def sFilter(filters, content, returnActive=False, **kwargs):
 	content = u(content)
 	lenfilters = len(filters)

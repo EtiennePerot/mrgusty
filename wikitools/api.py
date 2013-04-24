@@ -36,6 +36,11 @@ try:
 except:
 	gzip = False
 
+_defaultTimeout = None
+def setDefaultTimeout(timeout):
+	global _defaultTimeout
+	_defaultTimeout = timeout
+
 class APIError(Exception):
 	"""Base class for errors"""
 
@@ -205,6 +210,8 @@ class APIRequest:
 
 	def __getRaw(self, timeout=None):
 		data = False
+		if timeout is None:
+			timeout = _defaultTimeout
 		while not data:
 			try:
 				if self.sleep >= self.wiki.maxwaittime or self.iswrite:
