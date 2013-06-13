@@ -36,6 +36,10 @@ try:
 except:
 	feedparser = None
 try:
+	import bs4
+except:
+	bs4 = None
+try:
 	import steam
 except:
 	steam = None
