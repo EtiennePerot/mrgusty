@@ -40,14 +40,15 @@ try:
 except:
 	bs4 = None
 try:
+	sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.sep + u'steamodd')
 	import steam
-except:
+except ImportError:
 	steam = None
 from wikiUpload import wikiUploader
 
 from botConfig import config
 if steam is not None and 'steamAPI' in config:
-	steam.set_api_key(config['steamAPI'])
+	steam.api.key.set(config['steamAPI'])
 if 'apiTimeout' in config:
 	wikitools.api.setDefaultTimeout(config['apiTimeout'])
 config['runtime'] = {
@@ -226,21 +227,21 @@ def updateEditCount(force=False):
 # Because SOME LIBRARY will not use singletons, this has to be done at the bot level
 # rather than the individual filter level to avoid loading the damn thing twice.
 steamGameSchemas = {}
-def steamGetGameSchema(game):
+def steamGetGameSchema(appID, lang='en_US'):
 	global steamGameSchemas
 	if steam is None:
 		return None
-	if game not in steamGameSchemas:
-		steamGameSchemas[game] = game.item_schema()
-	return steamGameSchemas[game]
+	if appID not in steamGameSchemas:
+		steamGameSchemas[appID] = steam.items.schema(appID, lang)
+	return steamGameSchemas[appID]
 steamGameAssets = {}
-def steamGetGameAssets(game):
+def steamGetGameAssets(appID, lang='en_US'):
 	global steamGameAssets
 	if steam is None:
 		return None
-	if game not in steamGameAssets:
-		steamGameAssets[game] = game.assets()
-	return steamGameAssets[game]
+	if appID not in steamGameAssets:
+		steamGameAssets[appID] = steam.items.assets(appID, lang)
+	return steamGameAssets[appID]
 
 def compileRegex(regex, flags=re.IGNORECASE):
 	global config

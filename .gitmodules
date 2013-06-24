@@ -1,0 +1,3 @@
+[submodule "steamodd"]
+	path = steamodd
+	url = https://github.com/Lagg/steamodd.git
