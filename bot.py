@@ -30,7 +30,6 @@ import shutil
 import itertools
 from Queue import Queue
 import wikitools
-import wikiUpload
 try:
 	import feedparser
 except:
@@ -44,7 +43,6 @@ try:
 	import steam
 except ImportError:
 	steam = None
-from wikiUpload import wikiUploader
 
 from botConfig import config
 if steam is not None and 'steamAPI' in config:
@@ -57,8 +55,7 @@ config['runtime'] = {
 	'wiki': None,
 	'edits': 0,
 	'regexes': {},
-	'pages': {},
-	'uploader': wikiUploader(config['username'], config['password'], config['api'])
+	'pages': {}
 }
 
 def u(s):
@@ -196,9 +193,9 @@ def deletePage(p, summary=False):
 	if summary:
 		summary = getSummary(summary)
 	return page(p).delete(summary)
-def uploadFile(filename, destfile, pagecontent='', license='', overwrite=False, reupload=False):
-	global config
-	return config['runtime']['uploader'].upload(filename, destfile, pagecontent, license, overwrite=overwrite, reupload=reupload)
+def uploadFile(filename, destfile, pagecontent='', license='', ignorewarnings=False):
+	wikiFile = wikitools.wikifile.File(wiki=wiki(), title=destfile)
+	return wikiFile.upload(fileobj=open(filename, 'rb'), ignorewarnings=ignorewarnings, comment=u(pagecontent + '\n' + license))
 def updateRCID():
 	if abs(config['runtime']['rcid'] - config['runtime']['onlinercid']) >= config['rcidrate']:
 		tprint('Updating last RCID...')
