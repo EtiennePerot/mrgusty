@@ -177,7 +177,7 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 		else:
 			n = 0
 			success = False
-			while n < 5 and not success:
+			while n < config['editCreateRetries'] and not success:
 				if minor:
 					result = p.edit(u(content), summary=summary, minor=True, bot=bot)
 				else:
