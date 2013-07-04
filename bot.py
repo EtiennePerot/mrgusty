@@ -175,10 +175,16 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 			else:
 				result = p.edit(u(content), summary=summary, notminor=True, bot=bot, nocreate=nocreate)
 		else:
-			if minor:
-				result = p.edit(u(content), summary=summary, minor=True, bot=bot)
-			else:
-				result = p.edit(u(content), summary=summary, notminor=True, bot=bot)
+			n = 0
+			success = False
+			while n < 5 and not success:
+				if minor:
+					result = p.edit(u(content), summary=summary, minor=True, bot=bot)
+				else:
+					result = p.edit(u(content), summary=summary, notminor=True, bot=bot)
+				n += 1
+				p.setPageInfo()
+				success = page.exists
 	except:
 		warning('Couldn\'t edit', p.title)
 		return None
