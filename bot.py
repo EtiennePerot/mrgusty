@@ -184,7 +184,7 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 					result = p.edit(u(content), summary=summary, notminor=True, bot=bot)
 				n += 1
 				p.setPageInfo()
-				success = page.exists
+				success = p.exists
 	except:
 		warning('Couldn\'t edit', p.title)
 		return None
