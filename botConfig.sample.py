@@ -16,6 +16,7 @@ config = {
 	'apiTimeout': 15, # If the API doesn't answer within this timeframe, try again
 	'editWaitTime': (0.1, 0.5), # Before every edit, wait a random number of seconds between the two provided numbers. Set to None or remove the line to ignore.
 	'editCreateRetries': 5, # Number of times to retry page creation edit on silent failures
+	'runIndef': False, # Boolean variable to dictate whether or not the bot will run continuously
 	'pages': {
 		'filters': 'User:MrGusty/Filters', # Filters page
 		'blacklist': 'User:MrGusty/Blacklist', # Blacklist
@@ -24,5 +25,4 @@ config = {
 		'rcid': 'User:MrGusty/RCID', # RCID page
 		'editcount': 'User:MrGusty/EditCount' # Edit count page
 	}
-	'runIndef': 0, #boolean variable to dictate whether or not the boot will run continuously
 }

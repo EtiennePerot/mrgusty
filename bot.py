@@ -1413,8 +1413,11 @@ def run():
 		pass
 	tprint('All done.')
 if __name__ == '__main__':
-	if config['runIndef'] != 0:
+	if 'runIndef' in config and config['runIndef'] is True:
 		while True:
-			run()
+			try:
+				run()
+			except Exception:
+				sys.stderr.write(Exception)
 	else:
 		run()
