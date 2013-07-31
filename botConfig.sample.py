@@ -24,4 +24,5 @@ config = {
 		'rcid': 'User:MrGusty/RCID', # RCID page
 		'editcount': 'User:MrGusty/EditCount' # Edit count page
 	}
+	'runIndef': 0, #boolean variable to dictate whether or not the boot will run continuously
 }
