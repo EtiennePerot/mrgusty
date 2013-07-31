@@ -1417,7 +1417,8 @@ if __name__ == '__main__':
 		while True:
 			try:
 				run()
-			except Exception:
-				traceback.print_exc(file=sys.stdout)
+			except Exception as e:
+				sys.stderr.write(e)
+				traceback.print_exc(file=sys.stderr)
 	else:
 		run()
