@@ -1418,6 +1418,6 @@ if __name__ == '__main__':
 			try:
 				run()
 			except Exception:
-				sys.stderr.write(Exception)
+				traceback.print_exc(file=sys.stdout)
 	else:
 		run()
