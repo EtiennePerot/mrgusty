@@ -1413,4 +1413,12 @@ def run():
 		pass
 	tprint('All done.')
 if __name__ == '__main__':
-	run()
+	if 'runIndef' in config and config['runIndef'] is True:
+		while True:
+			try:
+				run()
+			except Exception as e:
+				sys.stderr.write(e)
+				traceback.print_exc(file=sys.stderr)
+	else:
+		run()
