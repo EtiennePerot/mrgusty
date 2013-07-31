@@ -1413,4 +1413,8 @@ def run():
 		pass
 	tprint('All done.')
 if __name__ == '__main__':
-	run()
+	if config['runIndef'] != 0:
+		while True:
+			run()
+	else:
+		run()
