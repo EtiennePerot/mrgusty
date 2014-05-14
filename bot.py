@@ -981,17 +981,15 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 	content = u(content)
 	oldcontent = u''
 	loopTimes = 0
-	redirect = False
 	activeFilters = []
-	if len(content) > 9:
-		redirect = content[:9] == u'#REDIRECT'
-	filterKawrgs = {
+	redirect = len(content) > 9 and content[:9].lower() == u'#redirect'
+	filterKwargs = {
 		'returnActive': True,
 		'redirect': redirect
 	}
 	if article is not None:
 		article = page(article)
-		filterKawrgs['article'] = article
+		filterKwargs['article'] = article
 	while not loopTimes or content != oldcontent:
 		loopTimes += 1
 		if loopTimes > 2:
@@ -1001,28 +999,28 @@ def fixContent(content, article=None, returnActive=False, **kwargs):
 			break
 		oldcontent = content
 		# Apply unsafe filters
-		content, activeF = sFilter(filters['regular'], content, **filterKawrgs)
+		content, activeF = sFilter(filters['regular'], content, **filterKwargs)
 		activeFilters.extend(activeF)
 		# Apply safe filters
 		content, safelist = safeContent(content)
 		content, templatelist, templatekeys = templateExtract(content)
 		content, linklist, linkkeys = linkExtract(content)
-		content, activeF = sFilter(filters['safe'], content, **filterKawrgs)
+		content, activeF = sFilter(filters['safe'], content, **filterKwargs)
 		activeFilters.extend(activeF)
 		extraLinks = setFilterName(curry(linkTextFilter, filters['safe']), u'(Content filters applied to links)')
 		addLinkFilter(extraLinks)
 		if not redirect:
-			linklist, linkkeys, activeF = linkFilter(filters['link'], linklist, linkkeys, **filterKawrgs)
+			linklist, linkkeys, activeF = linkFilter(filters['link'], linklist, linkkeys, **filterKwargs)
 			activeFilters.extend(activeF)
 		content = linkRestore(content, linklist, linkkeys)
-		templatelist, templatekeys, activeF = templateFilter(filters['template'], templatelist, templatekeys, **filterKawrgs)
+		templatelist, templatekeys, activeF = templateFilter(filters['template'], templatelist, templatekeys, **filterKwargs)
 		activeFilters.extend(activeF)
 		content = templateRestore(content, templatelist, templatekeys)
 		content = safeContentRestore(content, safelist)
 		delLinkFilter(extraLinks)
 	if article is not None and u(article.title)[:5] == 'File:':
 		# Apply file filters
-		content, activeF = sFilter(filters['file'], content, **filterKawrgs)
+		content, activeF = sFilter(filters['file'], content, **filterKwargs)
 		activeFilters.extend(activeF)
 	if returnActive:
 		return content, activeFilters
