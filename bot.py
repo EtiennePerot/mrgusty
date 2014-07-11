@@ -119,13 +119,16 @@ def wiki():
 	if config['runtime']['wiki'] is None:
 		config['runtime']['wiki'] = wikitools.wiki.Wiki(config['api'])
 		tprint('Logging in as', config['username'], '...')
-		config['runtime']['wiki'].login(config['username'], config['password'])
+		try:		
+			config['runtime']['wiki'].login(config['username'], config['password'])
+			tprint('Logged in.')
+		except wikitools.AuthError:
+			sys.exit('Failed to log in.')
 		try:
 			config['runtime']['onlinercid'] = int(u(wikitools.page.Page(wiki(), config['pages']['rcid']).getWikiText()).strip())
 			config['runtime']['rcid'] = config['runtime']['onlinercid']
 		except:
 			error('Couldn\'t read RCID.')
-		tprint('Logged in.')
 	return config['runtime']['wiki']
 def page(p):
 	global config
