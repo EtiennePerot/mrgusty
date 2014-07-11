@@ -31,15 +31,23 @@ except:
 
 class WikiError(Exception):
 	"""Base class for errors"""
+	pass
 
 class BadTitle(WikiError):
 	"""Invalid title"""
-	
+	pass
+
 class NoPage(WikiError):
 	"""Non-existent page"""
+	pass
 
 class EditError(WikiError):
 	"""Problem with edit request"""
+	pass
+
+class AuthError(WikiError):
+	"""Failed to authenticate with wiki"""
+	pass
 
 class Namespace(int):
 	"""
@@ -172,7 +180,7 @@ class Wiki:
 			except:
 				print info['error']['code']
 				print info['error']['info']
-			return sys.exit("Failed to login")
+			raise AuthError 
 		data = {
 			"action" : "login",
 			"lgname" : username,
