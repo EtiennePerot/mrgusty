@@ -22,7 +22,6 @@ import threading
 import re
 import time
 import os
-import sys
 from urlparse import urlparse
 try:
 	import cPickle as pickle
