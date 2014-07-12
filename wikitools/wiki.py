@@ -179,7 +179,7 @@ class Wiki:
 			except:
 				print info['error']['code']
 				print info['error']['info']
-			raise AuthError 
+			raise AuthError() 
 		data = {
 			"action" : "login",
 			"lgname" : username,
