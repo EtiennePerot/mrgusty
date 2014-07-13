@@ -168,26 +168,30 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 		tprint('Editing', p.title, 'with summary', summary)
 	except:
 		pass
-	try:
-		if nocreate:
-			if minor:
-				result = p.edit(u(content), summary=summary, minor=True, bot=bot, nocreate=nocreate)
-			else:
-				result = p.edit(u(content), summary=summary, notminor=True, bot=bot, nocreate=nocreate)
-		else:
-			n = 0
-			success = False
-			while n < config['editCreateRetries'] and not success:
+	for retry in xrange(config.get('editRetries', 3)):
+		try:
+			if nocreate:
 				if minor:
-					result = p.edit(u(content), summary=summary, minor=True, bot=bot)
+					result = p.edit(u(content), summary=summary, minor=True, bot=bot, nocreate=nocreate)
 				else:
-					result = p.edit(u(content), summary=summary, notminor=True, bot=bot)
-				n += 1
-				p.setPageInfo()
-				success = p.exists
-	except:
-		warning('Couldn\'t edit', p.title)
-		return None
+					result = p.edit(u(content), summary=summary, notminor=True, bot=bot, nocreate=nocreate)
+			else:
+				n = 0
+				success = False
+				while n < config['editCreateRetries'] and not success:
+					if minor:
+						result = p.edit(u(content), summary=summary, minor=True, bot=bot)
+					else:
+						result = p.edit(u(content), summary=summary, notminor=True, bot=bot)
+					n += 1
+					p.setPageInfo()
+					success = p.exists
+			if result['edit']['result']:
+				break
+		except:
+			if retry == config['editRetries'] - 1: # Last retry
+				warning('Couldn\'t edit', p.title)
+				return None
 	try:
 		if result['edit']['result']:
 			config['runtime']['edits'] += 1
