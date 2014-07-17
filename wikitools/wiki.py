@@ -30,23 +30,18 @@ except:
 
 class WikiError(Exception):
 	"""Base class for errors"""
-	pass
 
 class BadTitle(WikiError):
 	"""Invalid title"""
-	pass
 
 class NoPage(WikiError):
 	"""Non-existent page"""
-	pass
 
 class EditError(WikiError):
 	"""Problem with edit request"""
-	pass
 
 class AuthError(WikiError):
 	"""Failed to authenticate with wiki"""
-	pass
 
 class Namespace(int):
 	"""
