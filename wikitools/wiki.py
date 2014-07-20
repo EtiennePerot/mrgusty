@@ -40,6 +40,9 @@ class NoPage(WikiError):
 class EditError(WikiError):
 	"""Problem with edit request"""
 
+class AuthError(WikiError):
+	"""Failed to authenticate with wiki"""
+
 class Namespace(int):
 	"""
 	Class for namespace 'constants'
@@ -171,7 +174,7 @@ class Wiki:
 			except:
 				print info['error']['code']
 				print info['error']['info']
-			return False
+			raise AuthError() 
 		data = {
 			"action" : "login",
 			"lgname" : username,
