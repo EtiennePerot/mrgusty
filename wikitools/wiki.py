@@ -33,7 +33,7 @@ class WikiError(Exception):
 
 class BadTitle(WikiError):
 	"""Invalid title"""
-
+	
 class NoPage(WikiError):
 	"""Non-existent page"""
 
