@@ -59,6 +59,7 @@ def setInitConf():
 		'regexes': {},
 		'pages': {}
 	}
+setInitConf()
 def u(s):
 	if type(s) is type(u''):
 		return s
@@ -1399,6 +1400,7 @@ def programExists(programName):
 
 def run():
 	global config
+	setInitConf()
 	tprint('Bot started.')
 	loadPage(config['pages']['filters'])
 	for p in sys.argv[1:]:
