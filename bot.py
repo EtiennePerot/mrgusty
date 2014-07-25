@@ -49,15 +49,16 @@ if steam is not None and 'steamAPI' in config:
 	steam.api.key.set(config['steamAPI'])
 if 'apiTimeout' in config:
 	wikitools.api.setDefaultTimeout(config['apiTimeout'])
-config['runtime'] = {
-	'rcid': -1,
-	'onlinercid': -1,
-	'wiki': None,
-	'edits': 0,
-	'regexes': {},
-	'pages': {}
-}
-
+def setInitConf():
+	global config
+	config['runtime'] = {
+		'rcid': -1,
+		'onlinercid': -1,
+		'wiki': None,
+		'edits': 0,
+		'regexes': {},
+		'pages': {}
+	}
 def u(s):
 	if type(s) is type(u''):
 		return s
@@ -1395,6 +1396,7 @@ def programExists(programName):
 		return result == 0
 	except:
 		return False
+
 def run():
 	global config
 	tprint('Bot started.')
