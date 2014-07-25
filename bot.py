@@ -50,21 +50,21 @@ if steam is not None and 'steamAPI' in config:
 if 'apiTimeout' in config:
 	wikitools.api.setDefaultTimeout(config['apiTimeout'])
 
-#Define config values that need refreshing on runIndef
-def setInitConf():
-	global config
-	config['runtime'] = {
-		'wiki': None,
-		'edits': 0,
-		'pages': {}
-	}
-setInitConf() #Apply them
-#Apply the remaining values that don't need refreshing
+#Create dict and apply values that don't need refreshing
 config['runtime'] = {
 	'rcid' : -1,
 	'onlinercid' : -1,
 	'regexes': {}
 }
+#Define values that wil be refreshed later
+def setInitConf():
+	global config
+	config['runtime'].update({
+		'wiki': None,
+		'edits': 0,
+		'pages': {}
+	})
+setInitConf() #Append them on initial run
 
 def u(s):
 	if type(s) is type(u''):
