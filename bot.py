@@ -49,14 +49,22 @@ if steam is not None and 'steamAPI' in config:
 	steam.api.key.set(config['steamAPI'])
 if 'apiTimeout' in config:
 	wikitools.api.setDefaultTimeout(config['apiTimeout'])
+
+# Create dict and apply values that don't need refreshing
 config['runtime'] = {
-	'rcid': -1,
-	'onlinercid': -1,
-	'wiki': None,
-	'edits': 0,
-	'regexes': {},
-	'pages': {}
+	'rcid' : -1,
+	'onlinercid' : -1,
+	'regexes': {}
 }
+# Define values that wil be refreshed later
+def setInitConf():
+	global config
+	config['runtime'].update({
+		'wiki': None,
+		'edits': 0,
+		'pages': {}
+	})
+setInitConf() # Append them on initial run
 
 def u(s):
 	if type(s) is type(u''):
@@ -1395,8 +1403,10 @@ def programExists(programName):
 		return result == 0
 	except:
 		return False
+
 def run():
 	global config
+	setInitConf() # Re-establish initial config values for additional runs
 	tprint('Bot started.')
 	loadPage(config['pages']['filters'])
 	for p in sys.argv[1:]:
