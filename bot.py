@@ -413,6 +413,7 @@ class template:
 		self.paramNum = 0
 		self.indentation = {}
 		self.defaultIndent = 0
+		self.forceMini = False
 		if len(content) > 4 and content[:2] == '{{' and content[-2:] == '}}':
 			innerRegex = compileRegex(r'\s*\|\s*')
 			itemRegex = compileRegex(r'^(\S[^=]*?)\s*=\s*([\s\S]*?)$')
@@ -437,6 +438,8 @@ class template:
 		self.forceindent = False
 	def indentationMatters(self, doesitmatter=True):
 		self.forceindent = doesitmatter
+	def setForceMini(self, forceMini=True):
+		self.forceMini = forceMini
 	def getName(self):
 		return self.name
 	def setName(self, name):
@@ -545,7 +548,7 @@ class template:
 			return self.originalContent
 		self.fixOrder()
 		params = [self.name]
-		indentMode = len(self.params) > template.maxInlineParams or self.forceindent
+		indentMode = not self.forceMini and (len(self.params) > template.maxInlineParams or self.forceindent)
 		maxIndent = 0
 		if indentMode:
 			for k, v in self.params:
@@ -580,10 +583,15 @@ class template:
 						addKey = False
 					numParam += 1
 				if addKey:
-					key += k + u' = '
+					if self.forceMini:
+						key += k + u'='
+					else:
+						key += k + u' = '
 			params.append(key + v)
 		if indentMode:
 			params = u'\n'.join(params) + u'\n'
+		elif self.forceMini:
+			params = u'|'.join(params)
 		else:
 			params = u' | '.join(params)
 		return u'{{' + params + u'}}'
