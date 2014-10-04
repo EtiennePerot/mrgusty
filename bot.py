@@ -487,6 +487,7 @@ class template:
 	def appendParam(self, value=u''):
 		self.paramNum += 1
 		self.params.append((u(self.paramNum), value))
+		self.changed = True
 	def setPreferedIndentation(self, index, indent=0):
 		self.indentation[u(index)] = indent
 		self.changed = self.changed or self.forceindent
