@@ -1,3 +1,6 @@
 [submodule "steamodd"]
 	path = steamodd
 	url = https://github.com/Lagg/steamodd.git
+[submodule "wikitools"]
+	path = wikitools
+	url = git://perot.me/wikitools
