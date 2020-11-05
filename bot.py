@@ -1233,6 +1233,7 @@ def patrolChanges():
 			'action':'query',
 			'list':'recentchanges',
 			'rctoken':'patrol',
+			'rcprop': 'user', # https://phabricator.wikimedia.org/T228425
 			'rclimit':'500'
 		}).query(querycontinue=False)[u'query'][u'recentchanges']
 		recentChanges.reverse()
