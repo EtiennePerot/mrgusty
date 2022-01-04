@@ -3,4 +3,4 @@
 	url = https://github.com/Lagg/steamodd.git
 [submodule "wikitools"]
 	path = wikitools
-	url = git://perot.me/wikitools
+	url = https://github.com/ThePortalWiki/wikitools.git
