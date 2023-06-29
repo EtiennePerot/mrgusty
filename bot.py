@@ -200,7 +200,7 @@ def editPage(p, content, summary=u'', minor=True, bot=True, nocreate=True):
 			if result['edit']['result']:
 				break
 		except:
-			if retry == config['editRetries'] - 1: # Last retry
+			if retry == config.get('editRetries', 3) - 1: # Last retry
 				warning('Couldn\'t edit', p.title)
 				return None
 	try:
